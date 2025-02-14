@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { LogOut, Plus, Loader2, Lock, Shield, Binary, Image, Video, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState, useRef } from 'react';
+import { useToast } from "@/hooks/use-toast";
 
 type FormData = {
   title: string;
@@ -30,9 +31,15 @@ export default function HomePage() {
   const { user, logoutMutation } = useAuth();
   const [previewFiles, setPreviewFiles] = useState<{ file: File; preview: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   const form = useForm<FormData>({
     resolver: zodResolver(insertNoteSchema),
+    defaultValues: {
+      title: '',
+      content: '',
+      attachments: []
+    }
   });
 
   const { data: notes = [], isLoading } = useQuery<Note[]>({
@@ -42,23 +49,17 @@ export default function HomePage() {
   const createNoteMutation = useMutation({
     mutationFn: async (data: FormData) => {
       try {
-        console.log("Starting note creation...");
         const encryptedContent = encryptText(data.content, user!.password);
-        console.log("Content encrypted successfully");
 
         let encryptedAttachments: Attachment[] = [];
         if (data.attachments?.length) {
-          console.log(`Processing ${data.attachments.length} attachments...`);
           encryptedAttachments = await Promise.all(
             data.attachments.map(async file => {
-              const attachment = await encryptFile(file, user!.password);
-              console.log(`Attachment encrypted: ${file.name}`);
-              return attachment;
+              return await encryptFile(file, user!.password);
             })
           );
         }
 
-        console.log("Sending request to server...");
         const res = await apiRequest("POST", "/api/notes", {
           title: data.title,
           content: encryptedContent,
@@ -67,7 +68,7 @@ export default function HomePage() {
 
         if (!res.ok) {
           const error = await res.text();
-          throw new Error(`Failed to create note: ${error}`);
+          throw new Error(error);
         }
 
         return res.json();
@@ -80,6 +81,17 @@ export default function HomePage() {
       queryClient.invalidateQueries({ queryKey: ["/api/notes"] });
       setPreviewFiles([]);
       form.reset();
+      toast({
+        title: "Nota salvata",
+        description: "La nota è stata salvata con successo",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Errore",
+        description: "Si è verificato un errore durante il salvataggio della nota",
+        variant: "destructive",
+      });
     },
   });
 
@@ -91,6 +103,14 @@ export default function HomePage() {
       file.type.startsWith('image/') || file.type.startsWith('video/')
     );
 
+    if (validFiles.length !== files.length) {
+      toast({
+        title: "File non supportati",
+        description: "Alcuni file sono stati ignorati perché non supportati",
+        variant: "destructive",
+      });
+    }
+
     const newPreviews = validFiles.map(file => ({
       file,
       preview: URL.createObjectURL(file)
@@ -98,14 +118,12 @@ export default function HomePage() {
 
     setPreviewFiles(prev => [...prev, ...newPreviews]);
 
-    // Update form value with all files (including existing ones)
     const currentFiles = form.getValues('attachments') || [];
     form.setValue('attachments', [...currentFiles, ...validFiles]);
   };
 
   const removeFile = (index: number) => {
     setPreviewFiles(prev => {
-      // Clean up the URL to prevent memory leaks
       URL.revokeObjectURL(prev[index].preview);
       return prev.filter((_, i) => i !== index);
     });
@@ -131,7 +149,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-black text-white font-mono">
       <header className="border-b border-zinc-800">
-        <div className="container flex items-center justify-between h-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
           <div className="flex items-center space-x-2">
             <Shield className="h-6 w-6" />
             <h1 className="text-lg font-bold">GNOTE v1.0</h1>
@@ -152,7 +170,7 @@ export default function HomePage() {
         </div>
       </header>
 
-      <main className="container py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-8">
           <div className="flex items-center space-x-2">
             <Lock className="h-6 w-6" />
