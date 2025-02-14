@@ -36,11 +36,13 @@ export default function HomePage() {
   const { toast } = useToast();
 
   const form = useForm<FormData>({
-    resolver: zodResolver(insertNoteSchema.extend({
-      title: z.string().min(1, "Il titolo è obbligatorio"),
-      content: z.string().min(1, "Il contenuto è obbligatorio"),
-      attachments: z.array(z.instanceof(File)).optional(),
-    })),
+    resolver: zodResolver(
+      z.object({
+        title: z.string().min(1, "Il titolo è obbligatorio"),
+        content: z.string().min(1, "Il contenuto è obbligatorio"),
+        attachments: z.array(z.instanceof(File)).optional(),
+      })
+    ),
     defaultValues: {
       title: '',
       content: '',
@@ -78,7 +80,7 @@ export default function HomePage() {
       console.error("Errore durante il salvataggio:", error);
       toast({
         title: "Errore",
-        description: "Errore nel salvataggio della nota",
+        description: error instanceof Error ? error.message : "Errore nel salvataggio della nota",
         variant: "destructive",
       });
     },
