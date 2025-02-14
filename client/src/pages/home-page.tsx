@@ -11,20 +11,28 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { insertNoteSchema, type Note } from "@shared/schema";
+import { insertNoteSchema, type Note, type Attachment } from "@shared/schema";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { encryptText, decryptText } from "@/lib/crypto";
+import { encryptText, decryptText, encryptFile, decryptFile } from "@/lib/crypto";
 import { Label } from "@/components/ui/label";
-import { LogOut, Plus, Loader2, Lock, Shield, Binary } from "lucide-react";
+import { LogOut, Plus, Loader2, Lock, Shield, Binary, Image, Video, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 
+type FormData = {
+  title: string;
+  content: string;
+  attachments?: File[];
+};
 
 export default function HomePage() {
   const { user, logoutMutation } = useAuth();
   const [remainingBytes, setRemainingBytes] = useState(156);
-  const form = useForm({
+  const [previewFiles, setPreviewFiles] = useState<{ file: File; preview: string }[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const form = useForm<FormData>({
     resolver: zodResolver(insertNoteSchema),
   });
 
@@ -33,23 +41,54 @@ export default function HomePage() {
   });
 
   const createNoteMutation = useMutation({
-    mutationFn: async (data: { title: string; content: string }) => {
+    mutationFn: async (data: FormData) => {
+      // Encrypt text content
       const encryptedContent = encryptText(data.content, user!.password);
+
+      // Encrypt attachments if any
+      let encryptedAttachments: Attachment[] = [];
+      if (data.attachments?.length) {
+        encryptedAttachments = await Promise.all(
+          data.attachments.map(file => encryptFile(file, user!.password))
+        );
+      }
+
       const res = await apiRequest("POST", "/api/notes", {
-        ...data,
+        title: data.title,
         content: encryptedContent,
+        attachments: encryptedAttachments,
       });
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notes"] });
+      setPreviewFiles([]);
+      form.reset();
     },
   });
 
-  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const bytes = new TextEncoder().encode(e.target.value).length;
-    setRemainingBytes(156 - bytes);
-    form.setValue('content', e.target.value);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const validFiles = files.filter(file =>
+      file.type.startsWith('image/') || file.type.startsWith('video/')
+    );
+
+    // Create previews
+    const newPreviews = validFiles.map(file => ({
+      file,
+      preview: URL.createObjectURL(file)
+    }));
+
+    setPreviewFiles(prev => [...prev, ...newPreviews]);
+    form.setValue('attachments', validFiles);
+  };
+
+  const removeFile = (index: number) => {
+    setPreviewFiles(prev => prev.filter((_, i) => i !== index));
+    const currentFiles = form.getValues('attachments') || [];
+    form.setValue('attachments',
+      currentFiles.filter((_, i) => i !== index)
+    );
   };
 
   if (isLoading) {
@@ -110,12 +149,13 @@ export default function HomePage() {
               >
                 <div className="space-y-2">
                   <Label htmlFor="title">TITOLO</Label>
-                  <Input 
-                    id="title" 
-                    {...form.register("title")} 
+                  <Input
+                    id="title"
+                    {...form.register("title")}
                     className="bg-black border-zinc-700"
                   />
                 </div>
+
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <Label htmlFor="content">CONTENUTO</Label>
@@ -138,6 +178,63 @@ export default function HomePage() {
                     <p className="text-red-500 text-sm">{form.formState.errors.content.message?.toString()}</p>
                   )}
                 </div>
+
+                {/* File Upload Section */}
+                <div className="space-y-2">
+                  <Label>ALLEGATI</Label>
+                  <div
+                    className="border-2 border-dashed border-zinc-700 rounded-lg p-4 text-center cursor-pointer"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      className="hidden"
+                      multiple
+                      accept="image/*,video/*"
+                      onChange={handleFileChange}
+                    />
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="flex gap-2">
+                        <Image className="h-6 w-6" />
+                        <Video className="h-6 w-6" />
+                      </div>
+                      <p className="text-sm text-zinc-400">
+                        CLICK TO ADD IMAGES OR VIDEOS
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* File Previews */}
+                  {previewFiles.length > 0 && (
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      {previewFiles.map((file, index) => (
+                        <div key={index} className="relative group">
+                          {file.file.type.startsWith('image/') ? (
+                            <img
+                              src={file.preview}
+                              alt={file.file.name}
+                              className="w-full h-24 object-cover rounded-lg"
+                            />
+                          ) : (
+                            <video
+                              src={file.preview}
+                              className="w-full h-24 object-cover rounded-lg"
+                            />
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeFile(index)}
+                            className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <Button
                   type="submit"
                   className="w-full bg-white text-black hover:bg-zinc-200"
@@ -165,9 +262,35 @@ export default function HomePage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="whitespace-pre-wrap font-mono text-zinc-300">
+                <p className="whitespace-pre-wrap font-mono text-zinc-300 mb-4">
                   {decryptText(note.content, user!.password)}
                 </p>
+
+                {/* Render attachments */}
+                {note.attachments && note.attachments.length > 0 && (
+                  <div className="grid grid-cols-2 gap-2">
+                    {note.attachments.map((attachment, index) => {
+                      const decryptedData = decryptFile(attachment.data, user!.password);
+                      const dataUrl = `data:${attachment.mimeType};base64,${decryptedData}`;
+
+                      return attachment.type === 'image' ? (
+                        <img
+                          key={index}
+                          src={dataUrl}
+                          alt={attachment.fileName}
+                          className="w-full h-24 object-cover rounded-lg"
+                        />
+                      ) : (
+                        <video
+                          key={index}
+                          src={dataUrl}
+                          controls
+                          className="w-full h-24 object-cover rounded-lg"
+                        />
+                      );
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
