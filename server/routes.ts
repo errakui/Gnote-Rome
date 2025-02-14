@@ -28,6 +28,21 @@ export function registerRoutes(app: Express): Server {
         hasAttachments: Boolean(req.body.attachments?.length)
       });
 
+      // Log request size
+      const contentLength = req.get('content-length');
+      console.log("Request size:", {
+        contentLength,
+        limit: req.app.get('json limit')
+      });
+
+      if (req.body.attachments) {
+        console.log("Attachments info:", req.body.attachments.map(att => ({
+          type: att.type,
+          fileSize: att.data.length,
+          fileName: att.fileName
+        })));
+      }
+
       const note = await storage.createNote(req.user.id, req.body);
       console.log("Note created successfully:", note.id);
       res.status(201).json(note);
