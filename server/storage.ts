@@ -47,18 +47,27 @@ export class DatabaseStorage implements IStorage {
 
   async createNote(userId: number, insertNote: InsertNote): Promise<Note> {
     try {
+      console.log("Tentativo di creazione nota con dati:", {
+        userId,
+        title: insertNote.title,
+        contentLength: insertNote.content?.length,
+        attachmentsCount: insertNote.attachments?.length
+      });
+
       if (!insertNote.title || !insertNote.content) {
         throw new Error("Titolo e contenuto sono obbligatori");
       }
 
-      // Verifica dimensione allegati
       if (insertNote.attachments) {
         const totalSize = insertNote.attachments.reduce((sum, att) => sum + att.data.length, 0);
-        if (totalSize > 10 * 1024 * 1024) { // 10MB in bytes
+        console.log("Dimensione totale allegati:", totalSize / 1024 / 1024, "MB");
+
+        if (totalSize > 10 * 1024 * 1024) {
           throw new Error("La dimensione totale degli allegati supera i 10MB");
         }
       }
 
+      console.log("Inserimento nota nel database...");
       const [note] = await db.insert(notes).values({
         userId,
         title: insertNote.title,
@@ -66,6 +75,7 @@ export class DatabaseStorage implements IStorage {
         attachments: insertNote.attachments || null,
       }).returning();
 
+      console.log("Nota creata con successo:", note.id);
       return note;
     } catch (error) {
       console.error("Errore durante la creazione della nota:", error);

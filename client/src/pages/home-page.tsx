@@ -50,13 +50,14 @@ export default function HomePage() {
       content: string;
       attachments?: Attachment[];
     }) => {
-      console.log("Inizio salvataggio nota...");
+      console.log("Inizio salvataggio nota...", data); //Added detailed log
       const res = await apiRequest("POST", "/api/notes", data);
       if (!res.ok) {
         const errorText = await res.text();
-        console.error("Errore risposta server:", errorText);
+        console.error("Errore risposta server:", errorText, res); //Added detailed log
         throw new Error(errorText);
       }
+      console.log("Nota salvata con successo dal server", res); //Added detailed log
       return res.json();
     },
     onSuccess: () => {
@@ -80,12 +81,12 @@ export default function HomePage() {
 
   const onSubmit = async (data: FormData) => {
     try {
-      console.log("Preparazione nota per il salvataggio...");
+      console.log("Preparazione nota per il salvataggio...", data); //Added detailed log
       const encryptedContent = encryptText(data.content, user!.password);
 
       const attachments = await Promise.all(
         (data.attachments || []).map(async (file: File) => {
-          console.log(`Elaborazione file: ${file.name}`);
+          console.log(`Elaborazione file: ${file.name}`, file); //Added detailed log
           const encryptedData = await encryptFile(file, user!.password);
           const fileType = file.type.startsWith('image/') ? ('image' as const) : ('video' as const);
 
@@ -98,7 +99,7 @@ export default function HomePage() {
         })
       );
 
-      console.log("Invio nota al server...");
+      console.log("Invio nota al server...", {title: data.title, content: encryptedContent, attachments}); //Added detailed log
       await createNoteMutation.mutateAsync({
         title: data.title,
         content: encryptedContent,

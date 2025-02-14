@@ -21,6 +21,13 @@ export function registerRoutes(app: Express): Server {
         return res.sendStatus(401);
       }
 
+      console.log("Ricevuta richiesta di creazione nota:", {
+        userId: req.user.id,
+        hasTitle: !!req.body.title,
+        hasContent: !!req.body.content,
+        attachmentsCount: req.body.attachments?.length
+      });
+
       const contentLength = parseInt(req.get('content-length') || '0');
       const limit = 10 * 1024 * 1024; // 10MB in bytes
 
@@ -31,7 +38,7 @@ export function registerRoutes(app: Express): Server {
       }
 
       const note = await storage.createNote(req.user.id, req.body);
-      console.log("Note created successfully:", note.id);
+      console.log("Nota creata con successo:", note.id);
       res.status(201).json(note);
     } catch (error) {
       console.error("Error creating note:", error);
