@@ -5,7 +5,7 @@ import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
-import { User as SelectUser } from "@shared/schema";
+import { User as SelectUser, insertUserSchema } from "@shared/schema";
 
 declare global {
   namespace Express {
@@ -53,14 +53,22 @@ export function setupAuth(app: Express) {
   passport.use(
     new LocalStrategy(async (username, password, done) => {
       try {
+        console.log("Tentativo di login per l'utente:", username);
         const user = await storage.getUserByUsername(username);
-        if (!user || !(await comparePasswords(password, user.password))) {
-          console.log("Tentativo di login fallito per l'utente:", username);
-          return done(null, false);
-        } else {
-          console.log("Login riuscito per l'utente:", username);
-          return done(null, user);
+
+        if (!user) {
+          console.log("Utente non trovato:", username);
+          return done(null, false, { message: "Incorrect username" });
         }
+
+        const isValid = await comparePasswords(password, user.password);
+        if (!isValid) {
+          console.log("Password non valida per l'utente:", username);
+          return done(null, false, { message: "Incorrect password" });
+        }
+
+        console.log("Login riuscito per l'utente:", username);
+        return done(null, user);
       } catch (error) {
         console.error("Errore durante l'autenticazione:", error);
         return done(error);
@@ -69,18 +77,19 @@ export function setupAuth(app: Express) {
   );
 
   passport.serializeUser((user, done) => {
-    console.log("Serializing user:", user.id);
+    console.log("Serializzazione utente:", user.id);
     done(null, user.id);
   });
 
   passport.deserializeUser(async (id: number, done) => {
     try {
-      console.log("Deserializing user:", id);
+      console.log("Deserializzazione utente:", id);
       const user = await storage.getUser(id);
       if (!user) {
-        console.log("User not found during deserialization:", id);
+        console.log("Utente non trovato durante la deserializzazione:", id);
         return done(null, false);
       }
+      console.log("Utente deserializzato con successo:", id);
       done(null, user);
     } catch (error) {
       console.error("Errore durante la deserializzazione dell'utente:", error);
@@ -89,12 +98,20 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/register", async (req, res, next) => {
-    console.log("Tentativo di registrazione per l'utente:", req.body.username);
     try {
+      console.log("Tentativo di registrazione per l'utente:", req.body.username);
+
+      // Validate request body
+      const validationResult = insertUserSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        console.log("Dati di registrazione non validi:", validationResult.error);
+        return res.status(400).json({ error: validationResult.error.errors });
+      }
+
       const existingUser = await storage.getUserByUsername(req.body.username);
       if (existingUser) {
         console.log("Username già esistente:", req.body.username);
-        return res.status(400).send("Username già esistente");
+        return res.status(400).json({ error: "Username già esistente" });
       }
 
       const hashedPassword = await hashPassword(req.body.password);
@@ -111,7 +128,7 @@ export function setupAuth(app: Express) {
           console.error("Errore durante il login post-registrazione:", err);
           return next(err);
         }
-        res.status(201).json(user);
+        res.status(201).json({ id: user.id, username: user.username });
       });
     } catch (error) {
       console.error("Errore durante la registrazione:", error);
@@ -119,9 +136,25 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/login", passport.authenticate("local"), (req, res) => {
-    console.log("Login completato per l'utente:", req.user?.username);
-    res.status(200).json(req.user);
+  app.post("/api/login", (req, res, next) => {
+    passport.authenticate("local", (err, user, info) => {
+      if (err) {
+        console.error("Errore durante il login:", err);
+        return next(err);
+      }
+      if (!user) {
+        console.log("Login fallito:", info?.message);
+        return res.status(401).json({ error: info?.message || "Login failed" });
+      }
+      req.login(user, (err) => {
+        if (err) {
+          console.error("Errore durante il login:", err);
+          return next(err);
+        }
+        console.log("Login completato per l'utente:", user.username);
+        res.json({ id: user.id, username: user.username });
+      });
+    })(req, res, next);
   });
 
   app.post("/api/logout", (req, res, next) => {
@@ -141,6 +174,7 @@ export function setupAuth(app: Express) {
       console.log("Tentativo di accesso non autorizzato all'API /user");
       return res.sendStatus(401);
     }
-    res.json(req.user);
+    console.log("Dati utente inviati per:", req.user?.username);
+    res.json({ id: req.user?.id, username: req.user?.username });
   });
 }
