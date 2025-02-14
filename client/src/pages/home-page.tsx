@@ -11,9 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { insertNoteSchema, type Note, type Attachment } from "@shared/schema";
+import { type Note, type Attachment } from "@shared/schema";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { encryptText, decryptText, encryptFile, decryptFile } from "@/lib/crypto";
 import { Label } from "@/components/ui/label";
 import { LogOut, Plus, Loader2, Lock, Shield, Binary, Image, Video, X } from "lucide-react";
@@ -34,7 +33,6 @@ export default function HomePage() {
   const { toast } = useToast();
 
   const form = useForm<FormData>({
-    resolver: zodResolver(insertNoteSchema),
     defaultValues: {
       title: '',
       content: '',
@@ -52,32 +50,29 @@ export default function HomePage() {
       content: string;
       attachments?: Attachment[];
     }) => {
-      try {
-        const res = await apiRequest("POST", "/api/notes", data);
-        if (!res.ok) {
-          const errorText = await res.text();
-          throw new Error(errorText);
-        }
-        return res.json();
-      } catch (error) {
-        console.error("Errore nella mutation:", error);
-        throw error;
+      console.log("Inizio salvataggio nota...");
+      const res = await apiRequest("POST", "/api/notes", data);
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("Errore risposta server:", errorText);
+        throw new Error(errorText);
       }
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notes"] });
       setPreviewFiles([]);
       form.reset();
       toast({
-        title: "Nota salvata",
-        description: "La nota è stata salvata con successo",
+        title: "Successo",
+        description: "Nota salvata con successo",
       });
     },
     onError: (error: Error) => {
       console.error("Errore durante il salvataggio:", error);
       toast({
         title: "Errore",
-        description: error.message || "Si è verificato un errore durante il salvataggio della nota",
+        description: "Errore nel salvataggio della nota",
         variant: "destructive",
       });
     },
@@ -85,39 +80,25 @@ export default function HomePage() {
 
   const onSubmit = async (data: FormData) => {
     try {
-      // Verifica dimensione massima totale (10MB)
-      const totalSize = (data.attachments || []).reduce((acc, file) => acc + file.size, 0);
-      if (totalSize > 10 * 1024 * 1024) {
-        throw new Error("La dimensione totale degli allegati non può superare 10MB");
-      }
-
-      // Encrypt content
+      console.log("Preparazione nota per il salvataggio...");
       const encryptedContent = encryptText(data.content, user!.password);
 
-      // Process attachments with size check
       const attachments = await Promise.all(
         (data.attachments || []).map(async (file: File) => {
-          if (file.size > 5 * 1024 * 1024) {
-            throw new Error(`Il file ${file.name} supera la dimensione massima di 5MB`);
-          }
+          console.log(`Elaborazione file: ${file.name}`);
+          const encryptedData = await encryptFile(file, user!.password);
+          const fileType = file.type.startsWith('image/') ? ('image' as const) : ('video' as const);
 
-          try {
-            const encryptedData = await encryptFile(file, user!.password);
-            const fileType = file.type.startsWith('image/') ? ('image' as const) : ('video' as const);
-
-            return {
-              type: fileType,
-              data: encryptedData.data,
-              fileName: file.name,
-              mimeType: file.type
-            } satisfies Attachment;
-          } catch (error) {
-            console.error(`Errore durante la crittografia del file ${file.name}:`, error);
-            throw new Error(`Errore durante la crittografia del file ${file.name}`);
-          }
+          return {
+            type: fileType,
+            data: encryptedData.data,
+            fileName: file.name,
+            mimeType: file.type
+          };
         })
       );
 
+      console.log("Invio nota al server...");
       await createNoteMutation.mutateAsync({
         title: data.title,
         content: encryptedContent,
@@ -128,7 +109,7 @@ export default function HomePage() {
       console.error('Errore durante il salvataggio:', error);
       toast({
         title: "Errore",
-        description: error instanceof Error ? error.message : "Errore durante il salvataggio della nota",
+        description: "Errore nel salvataggio della nota",
         variant: "destructive"
       });
     }
@@ -136,51 +117,26 @@ export default function HomePage() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
+    const validFiles = files.filter(file => 
+      file.type.startsWith('image/') || file.type.startsWith('video/')
+    );
 
-    // Verifica dimensione massima totale inclusi i file esistenti
-    const currentFiles = form.getValues('attachments') || [];
-    const totalSize = [...currentFiles, ...files].reduce((acc, file) => acc + file.size, 0);
-
-    if (totalSize > 10 * 1024 * 1024) {
+    if (validFiles.length !== files.length) {
       toast({
-        title: "File troppo grandi",
-        description: "La dimensione totale degli allegati non può superare 10MB",
+        title: "File non supportati",
+        description: "Alcuni file sono stati ignorati perché non supportati",
         variant: "destructive"
       });
-      return;
     }
 
-    const validFiles = files.filter(file => {
-      if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
-        toast({
-          title: "File non supportato",
-          description: `Il file ${file.name} non è un'immagine o un video`,
-          variant: "destructive"
-        });
-        return false;
-      }
+    const newPreviews = validFiles.map(file => ({
+      file,
+      preview: URL.createObjectURL(file)
+    }));
 
-      if (file.size > 5 * 1024 * 1024) {
-        toast({
-          title: "File troppo grande",
-          description: `Il file ${file.name} supera la dimensione massima di 5MB`,
-          variant: "destructive"
-        });
-        return false;
-      }
-
-      return true;
-    });
-
-    if (validFiles.length > 0) {
-      const newPreviews = validFiles.map(file => ({
-        file,
-        preview: URL.createObjectURL(file)
-      }));
-
-      setPreviewFiles(prev => [...prev, ...newPreviews]);
-      form.setValue('attachments', [...currentFiles, ...validFiles]);
-    }
+    setPreviewFiles(prev => [...prev, ...newPreviews]);
+    const currentFiles = form.getValues('attachments') || [];
+    form.setValue('attachments', [...currentFiles, ...validFiles]);
   };
 
   const removeFile = (index: number) => {
@@ -201,7 +157,7 @@ export default function HomePage() {
       <div className="flex items-center justify-center min-h-screen bg-black">
         <div className="text-center space-y-4">
           <Loader2 className="h-12 w-12 animate-spin mx-auto text-white" />
-          <p className="text-white font-mono">INITIALIZING SYSTEM...</p>
+          <p className="text-white font-mono">CARICAMENTO...</p>
         </div>
       </div>
     );
@@ -235,23 +191,20 @@ export default function HomePage() {
         <div className="flex justify-between items-center mb-8">
           <div className="flex items-center space-x-2">
             <Lock className="h-6 w-6" />
-            <h2 className="text-xl font-bold">ENCRYPTED DOCUMENTS</h2>
+            <h2 className="text-xl font-bold">NOTE CRIPTATE</h2>
           </div>
           <Dialog>
             <DialogTrigger asChild>
               <Button className="bg-white text-black hover:bg-zinc-200">
                 <Plus className="mr-2 h-4 w-4" />
-                NEW DOCUMENT
+                NUOVA NOTA
               </Button>
             </DialogTrigger>
             <DialogContent className="bg-zinc-900 border-zinc-800">
               <DialogHeader>
-                <DialogTitle className="font-mono text-white">CREATE NEW ENCRYPTED DOCUMENT</DialogTitle>
+                <DialogTitle className="font-mono text-white">CREA NUOVA NOTA CRIPTATA</DialogTitle>
               </DialogHeader>
-              <form
-                onSubmit={form.handleSubmit(onSubmit)}
-                className="space-y-4"
-              >
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="title">TITOLO</Label>
                   <Input
@@ -269,13 +222,10 @@ export default function HomePage() {
                     rows={5}
                     className="bg-black border-zinc-700 font-mono"
                   />
-                  {form.formState.errors.content && (
-                    <p className="text-red-500 text-sm">{form.formState.errors.content.message?.toString()}</p>
-                  )}
                 </div>
 
                 <div className="space-y-2">
-                  <Label>ALLEGATI</Label>
+                  <Label>MEDIA</Label>
                   <div
                     className="border-2 border-dashed border-zinc-700 rounded-lg p-4 text-center cursor-pointer"
                     onClick={() => fileInputRef.current?.click()}
@@ -294,7 +244,7 @@ export default function HomePage() {
                         <Video className="h-6 w-6" />
                       </div>
                       <p className="text-sm text-zinc-400">
-                        CLICK TO ADD IMAGES OR VIDEOS
+                        CLICCA PER AGGIUNGERE IMMAGINI O VIDEO
                       </p>
                     </div>
                   </div>
@@ -338,7 +288,7 @@ export default function HomePage() {
                   ) : (
                     <Binary className="mr-2 h-4 w-4" />
                   )}
-                  CRIPTA E SALVA
+                  SALVA NOTA
                 </Button>
               </form>
             </DialogContent>
@@ -389,7 +339,7 @@ export default function HomePage() {
           {notes.length === 0 && (
             <div className="col-span-full text-center py-12 text-zinc-500">
               <Lock className="h-12 w-12 mx-auto mb-4" />
-              <p className="font-mono">NO ENCRYPTED DOCUMENTS FOUND</p>
+              <p className="font-mono">NESSUNA NOTA TROVATA</p>
             </div>
           )}
         </div>
@@ -397,9 +347,3 @@ export default function HomePage() {
     </div>
   );
 }
-
-type InsertNote = {
-  title: string;
-  content: string;
-  attachments: Attachment[];
-};

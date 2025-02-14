@@ -46,7 +46,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createNote(userId: number, insertNote: InsertNote): Promise<Note> {
-    console.log("Inizio creazione nota per utente:", userId);
+    console.log("Creazione nota per utente:", userId);
     console.log("Dati nota:", {
       titolo: insertNote.title,
       lunghezza_contenuto: insertNote.content.length,
@@ -54,32 +54,13 @@ export class DatabaseStorage implements IStorage {
     });
 
     try {
-      // Validazione degli allegati
-      if (insertNote.attachments) {
-        console.log("Validazione allegati...");
-        insertNote.attachments.forEach((attachment, index) => {
-          if (!attachment.type || !attachment.data || !attachment.fileName || !attachment.mimeType) {
-            console.error("Allegato invalido all'indice:", index, "Dati allegato:", {
-              type: !!attachment.type,
-              data: !!attachment.data,
-              fileName: !!attachment.fileName,
-              mimeType: !!attachment.mimeType
-            });
-            throw new Error(`Allegato invalido all'indice ${index}`);
-          }
-        });
-        console.log("Validazione allegati completata con successo");
-      }
-
-      // Creazione nota nel database
-      console.log("Inserimento nota nel database...");
       const [note] = await db
         .insert(notes)
         .values({
           userId,
           title: insertNote.title,
           content: insertNote.content,
-          attachments: insertNote.attachments || null
+          attachments: insertNote.attachments || null,
         })
         .returning();
 
@@ -92,7 +73,7 @@ export class DatabaseStorage implements IStorage {
       return note;
     } catch (error) {
       console.error("Errore durante la creazione della nota:", error);
-      throw new Error(`Errore durante la creazione della nota: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`);
+      throw new Error("Errore durante il salvataggio della nota");
     }
   }
 }
