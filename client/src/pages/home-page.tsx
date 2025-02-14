@@ -190,23 +190,23 @@ export default function HomePage() {
               <form
                 onSubmit={form.handleSubmit(async (data) => {
                   try {
-                    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-                    const files = fileInput?.files;
-                    const attachments = [];
-                    
-                    if (files && files.length > 0) {
-                      for (let i = 0; i < files.length; i++) {
-                        const encrypted = await encryptFile(files[i], user!.password);
-                        attachments.push(encrypted);
-                      }
-                    }
+                    const attachments = form.getValues('attachments') || [];
+                    const encryptedAttachments = await Promise.all(
+                      attachments.map(file => encryptFile(file, user!.password))
+                    );
                     
                     createNoteMutation.mutate({
-                      ...data,
-                      attachments
+                      title: data.title,
+                      content: data.content,
+                      attachments: encryptedAttachments
                     });
                   } catch (error) {
                     console.error('Errore durante la criptazione:', error);
+                    toast({
+                      title: "Errore",
+                      description: "Errore durante la criptazione dei file",
+                      variant: "destructive"
+                    });
                   }
                 })}
                 className="space-y-4"
