@@ -54,17 +54,26 @@ export class DatabaseStorage implements IStorage {
         attachmentsCount: insertNote.attachments?.length
       });
 
+      // Validazione base
+      if (!userId) {
+        throw new Error("ID utente non valido");
+      }
+
       if (!insertNote.title || !insertNote.content) {
         throw new Error("Titolo e contenuto sono obbligatori");
       }
 
-      if (insertNote.attachments) {
+      // Gestione allegati
+      let processedAttachments = null;
+      if (insertNote.attachments && insertNote.attachments.length > 0) {
         const totalSize = insertNote.attachments.reduce((sum, att) => sum + att.data.length, 0);
         console.log("Dimensione totale allegati:", totalSize / 1024 / 1024, "MB");
 
-        if (totalSize > 10 * 1024 * 1024) {
-          throw new Error("La dimensione totale degli allegati supera i 10MB");
+        // Validazione dimensione totale aumentata a 50MB
+        if (totalSize > 50 * 1024 * 1024) {
+          throw new Error("La dimensione totale degli allegati supera i 50MB");
         }
+        processedAttachments = insertNote.attachments;
       }
 
       console.log("Inserimento nota nel database...");
@@ -72,7 +81,7 @@ export class DatabaseStorage implements IStorage {
         userId,
         title: insertNote.title,
         content: insertNote.content,
-        attachments: insertNote.attachments || null,
+        attachments: processedAttachments,
       }).returning();
 
       console.log("Nota creata con successo:", note.id);
