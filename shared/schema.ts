@@ -39,9 +39,7 @@ const attachmentSchema = z.object({
 
 export const insertNoteSchema = createInsertSchema(notes, {
   title: z.string().min(1, "Il titolo è obbligatorio"),
-  content: z.string()
-    .min(1, "Il contenuto è obbligatorio")
-    .max(156, "Il contenuto non può superare i 156 byte"),
+  content: z.string().min(1, "Il contenuto è obbligatorio"),
   attachments: z.array(attachmentSchema).optional(),
 }).omit({ userId: true, createdAt: true });
 

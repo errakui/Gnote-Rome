@@ -28,7 +28,6 @@ type FormData = {
 
 export default function HomePage() {
   const { user, logoutMutation } = useAuth();
-  const [remainingBytes, setRemainingBytes] = useState(156);
   const [previewFiles, setPreviewFiles] = useState<{ file: File; preview: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -42,10 +41,8 @@ export default function HomePage() {
 
   const createNoteMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      // Encrypt text content
       const encryptedContent = encryptText(data.content, user!.password);
 
-      // Encrypt attachments if any
       let encryptedAttachments: Attachment[] = [];
       if (data.attachments?.length) {
         encryptedAttachments = await Promise.all(
@@ -73,7 +70,6 @@ export default function HomePage() {
       file.type.startsWith('image/') || file.type.startsWith('video/')
     );
 
-    // Create previews
     const newPreviews = validFiles.map(file => ({
       file,
       preview: URL.createObjectURL(file)
@@ -157,20 +153,10 @@ export default function HomePage() {
                 </div>
 
                 <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <Label htmlFor="content">CONTENUTO</Label>
-                    <span className={`text-xs ${remainingBytes < 0 ? 'text-red-500' : 'text-zinc-400'}`}>
-                      {remainingBytes} BYTES RIMANENTI
-                    </span>
-                  </div>
+                  <Label htmlFor="content">CONTENUTO</Label>
                   <Textarea
                     id="content"
-                    {...form.register("content", {
-                      onChange: (e) => {
-                        const bytes = new TextEncoder().encode(e.target.value).length;
-                        setRemainingBytes(156 - bytes);
-                      }
-                    })}
+                    {...form.register("content")}
                     rows={5}
                     className="bg-black border-zinc-700 font-mono"
                   />
@@ -179,7 +165,6 @@ export default function HomePage() {
                   )}
                 </div>
 
-                {/* File Upload Section */}
                 <div className="space-y-2">
                   <Label>ALLEGATI</Label>
                   <div
@@ -205,7 +190,6 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  {/* File Previews */}
                   {previewFiles.length > 0 && (
                     <div className="grid grid-cols-2 gap-2 mt-2">
                       {previewFiles.map((file, index) => (
@@ -238,7 +222,7 @@ export default function HomePage() {
                 <Button
                   type="submit"
                   className="w-full bg-white text-black hover:bg-zinc-200"
-                  disabled={createNoteMutation.isPending || remainingBytes < 0}
+                  disabled={createNoteMutation.isPending}
                 >
                   {createNoteMutation.isPending ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -266,7 +250,6 @@ export default function HomePage() {
                   {decryptText(note.content, user!.password)}
                 </p>
 
-                {/* Render attachments */}
                 {note.attachments && note.attachments.length > 0 && (
                   <div className="grid grid-cols-2 gap-2">
                     {note.attachments.map((attachment, index) => {
