@@ -35,6 +35,10 @@ export function setupAuth(app: Express) {
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
+    cookie: {
+      secure: app.get("env") === "production",
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
   };
 
   if (app.get("env") === "production") {
@@ -64,10 +68,19 @@ export function setupAuth(app: Express) {
     }),
   );
 
-  passport.serializeUser((user, done) => done(null, user.id));
+  passport.serializeUser((user, done) => {
+    console.log("Serializing user:", user.id);
+    done(null, user.id);
+  });
+
   passport.deserializeUser(async (id: number, done) => {
     try {
+      console.log("Deserializing user:", id);
       const user = await storage.getUser(id);
+      if (!user) {
+        console.log("User not found during deserialization:", id);
+        return done(null, false);
+      }
       done(null, user);
     } catch (error) {
       console.error("Errore durante la deserializzazione dell'utente:", error);
