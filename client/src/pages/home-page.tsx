@@ -117,14 +117,25 @@ export default function HomePage() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    const validFiles = files.filter(file => 
-      file.type.startsWith('image/') || file.type.startsWith('video/')
-    );
+    const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+
+    const validFiles = files.filter(file => {
+      if (file.size > maxSize) {
+        toast({
+          title: "File troppo grande",
+          description: `Il file ${file.name} supera il limite di 10MB`,
+          variant: "destructive"
+        });
+        return false;
+      }
+      return file.type.startsWith('image/') || file.type.startsWith('video/');
+    });
 
     if (validFiles.length !== files.length) {
+      const invalidCount = files.length - validFiles.length;
       toast({
-        title: "File non supportati",
-        description: "Alcuni file sono stati ignorati perché non supportati",
+        title: "File non validi",
+        description: `${invalidCount} file sono stati ignorati perché non supportati o troppo grandi`,
         variant: "destructive"
       });
     }
