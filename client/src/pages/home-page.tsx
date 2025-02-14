@@ -52,24 +52,15 @@ export default function HomePage() {
       content: string;
       attachments?: Attachment[];
     }) => {
-      console.log("Starting mutation with data:", {
-        title: data.title,
-        contentLength: data.content.length,
-        attachmentsCount: data.attachments?.length || 0
-      });
-
       try {
         const res = await apiRequest("POST", "/api/notes", data);
-
         if (!res.ok) {
-          const error = await res.text();
-          console.error("Server response error:", error);
-          throw new Error(error);
+          const errorText = await res.text();
+          throw new Error(errorText);
         }
-
         return res.json();
       } catch (error) {
-        console.error("Error in createNoteMutation:", error);
+        console.error("Errore nella mutation:", error);
         throw error;
       }
     },
@@ -82,90 +73,114 @@ export default function HomePage() {
         description: "La nota è stata salvata con successo",
       });
     },
-    onError: (error) => {
-      console.error("Errore mutation:", error);
+    onError: (error: Error) => {
+      console.error("Errore durante il salvataggio:", error);
       toast({
         title: "Errore",
-        description: "Si è verificato un errore durante il salvataggio della nota",
+        description: error.message || "Si è verificato un errore durante il salvataggio della nota",
         variant: "destructive",
       });
     },
   });
 
-  // Form submission handler
   const onSubmit = async (data: FormData) => {
     try {
-      console.log("Starting form submission with data:", {
-        title: data.title,
-        contentLength: data.content.length,
-        attachmentsCount: data.attachments?.length || 0
-      });
+      // Verifica dimensione massima totale (10MB)
+      const totalSize = (data.attachments || []).reduce((acc, file) => acc + file.size, 0);
+      if (totalSize > 10 * 1024 * 1024) {
+        throw new Error("La dimensione totale degli allegati non può superare 10MB");
+      }
 
-      // Encrypt the content
+      // Encrypt content
       const encryptedContent = encryptText(data.content, user!.password);
-      console.log("Content encrypted successfully");
 
-      // Process attachments
-      const attachments = form.getValues('attachments') || [];
-      console.log("Processing attachments:", attachments.length);
+      // Process attachments with size check
+      const attachments = await Promise.all(
+        (data.attachments || []).map(async (file: File) => {
+          if (file.size > 5 * 1024 * 1024) {
+            throw new Error(`Il file ${file.name} supera la dimensione massima di 5MB`);
+          }
 
-      const processedAttachments: Attachment[] = await Promise.all(
-        attachments.map(async (file: File) => {
-          console.log("Processing attachment:", file.name);
-          const encryptedData = await encryptFile(file, user!.password);
-          return {
-            type: file.type.startsWith('image/') ? 'image' : 'video',
-            data: encryptedData.data,
-            fileName: file.name,
-            mimeType: file.type
-          };
+          try {
+            const encryptedData = await encryptFile(file, user!.password);
+            const fileType = file.type.startsWith('image/') ? ('image' as const) : ('video' as const);
+
+            return {
+              type: fileType,
+              data: encryptedData.data,
+              fileName: file.name,
+              mimeType: file.type
+            } satisfies Attachment;
+          } catch (error) {
+            console.error(`Errore durante la crittografia del file ${file.name}:`, error);
+            throw new Error(`Errore durante la crittografia del file ${file.name}`);
+          }
         })
       );
 
-      console.log("All attachments processed successfully");
-
-      // Create the note with encrypted content and attachments
       await createNoteMutation.mutateAsync({
         title: data.title,
         content: encryptedContent,
-        attachments: processedAttachments
+        attachments
       });
 
     } catch (error) {
-      console.error('Errore durante la criptazione:', error);
+      console.error('Errore durante il salvataggio:', error);
       toast({
         title: "Errore",
-        description: "Errore durante la criptazione dei dati",
+        description: error instanceof Error ? error.message : "Errore durante il salvataggio della nota",
         variant: "destructive"
       });
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return;
+    const files = Array.from(e.target.files || []);
 
-    const files = Array.from(e.target.files);
-    const validFiles = files.filter(file =>
-      file.type.startsWith('image/') || file.type.startsWith('video/')
-    );
+    // Verifica dimensione massima totale inclusi i file esistenti
+    const currentFiles = form.getValues('attachments') || [];
+    const totalSize = [...currentFiles, ...files].reduce((acc, file) => acc + file.size, 0);
 
-    if (validFiles.length !== files.length) {
+    if (totalSize > 10 * 1024 * 1024) {
       toast({
-        title: "File non supportati",
-        description: "Alcuni file sono stati ignorati perché non supportati",
-        variant: "destructive",
+        title: "File troppo grandi",
+        description: "La dimensione totale degli allegati non può superare 10MB",
+        variant: "destructive"
       });
+      return;
     }
 
-    const newPreviews = validFiles.map(file => ({
-      file,
-      preview: URL.createObjectURL(file)
-    }));
+    const validFiles = files.filter(file => {
+      if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+        toast({
+          title: "File non supportato",
+          description: `Il file ${file.name} non è un'immagine o un video`,
+          variant: "destructive"
+        });
+        return false;
+      }
 
-    setPreviewFiles(prev => [...prev, ...newPreviews]);
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: "File troppo grande",
+          description: `Il file ${file.name} supera la dimensione massima di 5MB`,
+          variant: "destructive"
+        });
+        return false;
+      }
 
-    const currentFiles = form.getValues('attachments') || [];
-    form.setValue('attachments', [...currentFiles, ...validFiles]);
+      return true;
+    });
+
+    if (validFiles.length > 0) {
+      const newPreviews = validFiles.map(file => ({
+        file,
+        preview: URL.createObjectURL(file)
+      }));
+
+      setPreviewFiles(prev => [...prev, ...newPreviews]);
+      form.setValue('attachments', [...currentFiles, ...validFiles]);
+    }
   };
 
   const removeFile = (index: number) => {

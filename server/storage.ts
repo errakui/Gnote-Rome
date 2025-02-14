@@ -46,22 +46,53 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createNote(userId: number, insertNote: InsertNote): Promise<Note> {
-    console.log("Creating note for user:", userId, "with data:", {
-      ...insertNote,
-      content: insertNote.content.substring(0, 20) + "...", // Log only first 20 chars of content
-      attachments: insertNote.attachments?.length || 0
+    console.log("Inizio creazione nota per utente:", userId);
+    console.log("Dati nota:", {
+      titolo: insertNote.title,
+      lunghezza_contenuto: insertNote.content.length,
+      numero_allegati: insertNote.attachments?.length || 0
     });
 
     try {
+      // Validazione degli allegati
+      if (insertNote.attachments) {
+        console.log("Validazione allegati...");
+        insertNote.attachments.forEach((attachment, index) => {
+          if (!attachment.type || !attachment.data || !attachment.fileName || !attachment.mimeType) {
+            console.error("Allegato invalido all'indice:", index, "Dati allegato:", {
+              type: !!attachment.type,
+              data: !!attachment.data,
+              fileName: !!attachment.fileName,
+              mimeType: !!attachment.mimeType
+            });
+            throw new Error(`Allegato invalido all'indice ${index}`);
+          }
+        });
+        console.log("Validazione allegati completata con successo");
+      }
+
+      // Creazione nota nel database
+      console.log("Inserimento nota nel database...");
       const [note] = await db
         .insert(notes)
-        .values({ ...insertNote, userId })
+        .values({
+          userId,
+          title: insertNote.title,
+          content: insertNote.content,
+          attachments: insertNote.attachments || null
+        })
         .returning();
-      console.log("Note created successfully:", note.id);
+
+      console.log("Nota creata con successo:", {
+        id: note.id,
+        titolo: note.title,
+        numero_allegati: note.attachments?.length || 0
+      });
+
       return note;
     } catch (error) {
-      console.error("Error creating note:", error);
-      throw error;
+      console.error("Errore durante la creazione della nota:", error);
+      throw new Error(`Errore durante la creazione della nota: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`);
     }
   }
 }
