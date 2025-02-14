@@ -4,8 +4,8 @@ import { setupAuth } from "./auth";
 import { registerRoutes } from "./routes";
 
 const app = express();
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 
 console.log("Inizializzazione del server...");
 
