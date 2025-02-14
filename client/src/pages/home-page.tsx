@@ -21,6 +21,7 @@ import { useState, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { insertNoteSchema } from "@shared/schema";
 import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from 'zod';
 
 type FormData = {
   title: string;
@@ -35,7 +36,11 @@ export default function HomePage() {
   const { toast } = useToast();
 
   const form = useForm<FormData>({
-    resolver: zodResolver(insertNoteSchema),
+    resolver: zodResolver(insertNoteSchema.extend({
+      title: z.string().min(1, "Il titolo è obbligatorio"),
+      content: z.string().min(1, "Il contenuto è obbligatorio"),
+      attachments: z.array(z.instanceof(File)).optional(),
+    })),
     defaultValues: {
       title: '',
       content: '',
@@ -79,23 +84,28 @@ export default function HomePage() {
     },
   });
 
-  const onSubmit = async (data: FormData) => {
+  const onSubmit = async (formData: FormData) => {
     try {
-      if (!data.title || !data.content) {
+      // Verifica errori di validazione
+      const errors = form.formState.errors;
+      if (Object.keys(errors).length > 0) {
+        console.error('Errori di validazione:', errors);
+        // Mostra il primo errore trovato
+        const firstError = Object.values(errors)[0];
         toast({
-          title: "Errore Validazione",
-          description: "Titolo e contenuto sono obbligatori",
+          title: "Errore di validazione",
+          description: firstError.message,
           variant: "destructive"
         });
         return;
       }
 
-      const encryptedContent = encryptText(data.content, user!.password);
+      const encryptedContent = encryptText(formData.content, user!.password);
 
       let attachments = [];
-      if (data.attachments && data.attachments.length > 0) {
+      if (formData.attachments && formData.attachments.length > 0) {
         attachments = await Promise.all(
-          data.attachments.map(async (file: File) => {
+          formData.attachments.map(async (file: File) => {
             try {
               const encryptedData = await encryptFile(file, user!.password);
               return {
@@ -113,7 +123,7 @@ export default function HomePage() {
       }
 
       await createNoteMutation.mutateAsync({
-        title: data.title,
+        title: formData.title,
         content: encryptedContent,
         attachments
       });
