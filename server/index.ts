@@ -23,7 +23,7 @@ if (process.env.NODE_ENV !== "production") {
   setupVite(app, httpServer);
 }
 
-const port = Number(process.env.PORT) || 5000;
+const port = Number(process.env.PORT) || 3000;
 httpServer.listen(port, "0.0.0.0", () => {
   console.log(`Server in esecuzione sulla porta ${port}`);
   console.log("Database URL configurato:", !!process.env.DATABASE_URL);
