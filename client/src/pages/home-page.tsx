@@ -19,15 +19,16 @@ import { LogOut, Plus, Loader2, Lock, Shield, Binary, Image, Video, X } from "lu
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import { insertNoteSchema } from "@shared/schema";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from 'zod';
 
-type FormData = {
-  title: string;
-  content: string;
-  attachments?: File[];
-};
+const formSchema = z.object({
+  title: z.string().min(1, "Il titolo è obbligatorio"),
+  content: z.string().min(1, "Il contenuto è obbligatorio"),
+  attachments: z.array(z.instanceof(File)).optional(),
+});
+
+type FormData = z.infer<typeof formSchema>;
 
 export default function HomePage() {
   const { user, logoutMutation } = useAuth();
@@ -36,13 +37,7 @@ export default function HomePage() {
   const { toast } = useToast();
 
   const form = useForm<FormData>({
-    resolver: zodResolver(
-      z.object({
-        title: z.string().min(1, "Il titolo è obbligatorio"),
-        content: z.string().min(1, "Il contenuto è obbligatorio"),
-        attachments: z.array(z.instanceof(File)).optional(),
-      })
-    ),
+    resolver: zodResolver(formSchema),
     defaultValues: {
       title: '',
       content: '',
