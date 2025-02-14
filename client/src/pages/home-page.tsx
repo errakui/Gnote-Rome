@@ -83,6 +83,40 @@ export default function HomePage() {
     },
   });
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+
+    const files = Array.from(e.target.files);
+    const validFiles = files.filter(file =>
+      file.type.startsWith('image/') || file.type.startsWith('video/')
+    );
+
+    const newPreviews = validFiles.map(file => ({
+      file,
+      preview: URL.createObjectURL(file)
+    }));
+
+    setPreviewFiles(prev => [...prev, ...newPreviews]);
+
+    // Update form value with all files (including existing ones)
+    const currentFiles = form.getValues('attachments') || [];
+    form.setValue('attachments', [...currentFiles, ...validFiles]);
+  };
+
+  const removeFile = (index: number) => {
+    setPreviewFiles(prev => {
+      // Clean up the URL to prevent memory leaks
+      URL.revokeObjectURL(prev[index].preview);
+      return prev.filter((_, i) => i !== index);
+    });
+
+    const currentFiles = form.getValues('attachments') || [];
+    form.setValue(
+      'attachments',
+      currentFiles.filter((_, i) => i !== index)
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-black">
