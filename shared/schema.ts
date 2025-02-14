@@ -26,7 +26,9 @@ export const insertUserSchema = createInsertSchema(users).extend({
 
 export const insertNoteSchema = createInsertSchema(notes, {
   title: z.string().min(1, "Il titolo è obbligatorio"),
-  content: z.string().min(1, "Il contenuto è obbligatorio"),
+  content: z.string()
+    .min(1, "Il contenuto è obbligatorio")
+    .max(156, "Il contenuto non può superare i 156 byte")
 }).omit({ userId: true, createdAt: true });
 
 // Types

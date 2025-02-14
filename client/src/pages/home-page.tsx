@@ -18,9 +18,12 @@ import { encryptText, decryptText } from "@/lib/crypto";
 import { Label } from "@/components/ui/label";
 import { LogOut, Plus, Loader2, Lock, Shield, Binary } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState } from 'react';
+
 
 export default function HomePage() {
   const { user, logoutMutation } = useAuth();
+  const [remainingBytes, setRemainingBytes] = useState(156);
   const form = useForm({
     resolver: zodResolver(insertNoteSchema),
   });
@@ -42,6 +45,12 @@ export default function HomePage() {
       queryClient.invalidateQueries({ queryKey: ["/api/notes"] });
     },
   });
+
+  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const bytes = new TextEncoder().encode(e.target.value).length;
+    setRemainingBytes(156 - bytes);
+    form.setValue('content', e.target.value);
+  };
 
   if (isLoading) {
     return (
@@ -100,7 +109,7 @@ export default function HomePage() {
                 className="space-y-4"
               >
                 <div className="space-y-2">
-                  <Label htmlFor="title">TITLE</Label>
+                  <Label htmlFor="title">TITOLO</Label>
                   <Input 
                     id="title" 
                     {...form.register("title")} 
@@ -108,25 +117,38 @@ export default function HomePage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="content">CONTENT</Label>
+                  <div className="flex justify-between">
+                    <Label htmlFor="content">CONTENUTO</Label>
+                    <span className={`text-xs ${remainingBytes < 0 ? 'text-red-500' : 'text-zinc-400'}`}>
+                      {remainingBytes} BYTES RIMANENTI
+                    </span>
+                  </div>
                   <Textarea
                     id="content"
-                    {...form.register("content")}
+                    {...form.register("content", {
+                      onChange: (e) => {
+                        const bytes = new TextEncoder().encode(e.target.value).length;
+                        setRemainingBytes(156 - bytes);
+                      }
+                    })}
                     rows={5}
                     className="bg-black border-zinc-700 font-mono"
                   />
+                  {form.formState.errors.content && (
+                    <p className="text-red-500 text-sm">{form.formState.errors.content.message?.toString()}</p>
+                  )}
                 </div>
                 <Button
                   type="submit"
                   className="w-full bg-white text-black hover:bg-zinc-200"
-                  disabled={createNoteMutation.isPending}
+                  disabled={createNoteMutation.isPending || remainingBytes < 0}
                 >
                   {createNoteMutation.isPending ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <Binary className="mr-2 h-4 w-4" />
                   )}
-                  ENCRYPT AND SAVE
+                  CRIPTA E SALVA
                 </Button>
               </form>
             </DialogContent>
