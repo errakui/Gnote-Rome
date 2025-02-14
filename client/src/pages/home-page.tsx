@@ -188,7 +188,27 @@ export default function HomePage() {
                 <DialogTitle className="font-mono text-white">CREATE NEW ENCRYPTED DOCUMENT</DialogTitle>
               </DialogHeader>
               <form
-                onSubmit={form.handleSubmit((data) => createNoteMutation.mutate(data))}
+                onSubmit={form.handleSubmit(async (data) => {
+                  try {
+                    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+                    const files = fileInput?.files;
+                    const attachments = [];
+                    
+                    if (files && files.length > 0) {
+                      for (let i = 0; i < files.length; i++) {
+                        const encrypted = await encryptFile(files[i], user!.password);
+                        attachments.push(encrypted);
+                      }
+                    }
+                    
+                    createNoteMutation.mutate({
+                      ...data,
+                      attachments
+                    });
+                  } catch (error) {
+                    console.error('Errore durante la criptazione:', error);
+                  }
+                })}
                 className="space-y-4"
               >
                 <div className="space-y-2">
