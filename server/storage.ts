@@ -1,8 +1,11 @@
 import { notes, users, type User, type InsertUser, type Note, type InsertNote } from "@shared/schema";
-import createMemoryStore from "memorystore";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 import session from "express-session";
+import connectPg from "connect-pg-simple";
+import { pool } from "./db";
 
-const MemoryStore = createMemoryStore(session);
+const PostgresSessionStore = connectPg(session);
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -13,58 +16,42 @@ export interface IStorage {
   sessionStore: session.Store;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private notes: Map<number, Note>;
-  currentUserId: number;
-  currentNoteId: number;
+export class DatabaseStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
-    this.users = new Map();
-    this.notes = new Map();
-    this.currentUserId = 1;
-    this.currentNoteId = 1;
-    this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000,
+    this.sessionStore = new PostgresSessionStore({
+      pool,
+      createTableIfMissing: true,
     });
   }
 
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentUserId++;
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
 
   async getNotes(userId: number): Promise<Note[]> {
-    return Array.from(this.notes.values()).filter(
-      (note) => note.userId === userId,
-    );
+    return await db.select().from(notes).where(eq(notes.userId, userId));
   }
 
   async createNote(userId: number, insertNote: InsertNote): Promise<Note> {
-    const id = this.currentNoteId++;
-    const now = new Date();
-    const note: Note = {
-      ...insertNote,
-      id,
-      userId,
-      createdAt: now,
-    };
-    this.notes.set(id, note);
+    const [note] = await db
+      .insert(notes)
+      .values({ ...insertNote, userId })
+      .returning();
     return note;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
