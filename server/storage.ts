@@ -46,49 +46,30 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createNote(userId: number, insertNote: InsertNote): Promise<Note> {
-    console.log("Creazione nota per utente:", userId);
-    console.log("Dati nota:", {
-      titolo: insertNote.title,
-      lunghezza_contenuto: insertNote.content.length,
-      numero_allegati: insertNote.attachments?.length || 0
-    });
-
     try {
-      // Validazione base dei dati
       if (!insertNote.title || !insertNote.content) {
         throw new Error("Titolo e contenuto sono obbligatori");
       }
 
-      // Controllo dimensione allegati
+      // Verifica dimensione allegati
       if (insertNote.attachments) {
         const totalSize = insertNote.attachments.reduce((sum, att) => sum + att.data.length, 0);
-        console.log("Dimensione totale allegati:", totalSize / 1024 / 1024, "MB");
-
         if (totalSize > 10 * 1024 * 1024) { // 10MB in bytes
           throw new Error("La dimensione totale degli allegati supera i 10MB");
         }
       }
 
-      const [note] = await db
-        .insert(notes)
-        .values({
-          userId,
-          title: insertNote.title,
-          content: insertNote.content,
-          attachments: insertNote.attachments || null,
-        })
-        .returning();
-
-      console.log("Nota creata con successo:", {
-        id: note.id,
-        titolo: note.title,
-        numero_allegati: note.attachments?.length || 0
-      });
+      const [note] = await db.insert(notes).values({
+        userId,
+        title: insertNote.title,
+        content: insertNote.content,
+        attachments: insertNote.attachments || null,
+      }).returning();
 
       return note;
     } catch (error) {
       console.error("Errore durante la creazione della nota:", error);
-      throw error; // Rilanciamo l'errore originale per mantenere il messaggio
+      throw error;
     }
   }
 }
