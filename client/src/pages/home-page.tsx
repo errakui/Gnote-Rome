@@ -47,27 +47,23 @@ export default function HomePage() {
   });
 
   const createNoteMutation = useMutation({
-    mutationFn: async (data: FormData) => {
+    mutationFn: async (data: {
+      title: string;
+      content: string;
+      attachments?: Attachment[];
+    }) => {
+      console.log("Starting mutation with data:", {
+        title: data.title,
+        contentLength: data.content.length,
+        attachmentsCount: data.attachments?.length || 0
+      });
+
       try {
-        const encryptedContent = encryptText(data.content, user!.password);
-
-        let encryptedAttachments: Attachment[] = [];
-        if (data.attachments?.length) {
-          encryptedAttachments = await Promise.all(
-            data.attachments.map(async file => {
-              return await encryptFile(file, user!.password);
-            })
-          );
-        }
-
-        const res = await apiRequest("POST", "/api/notes", {
-          title: data.title,
-          content: encryptedContent,
-          attachments: encryptedAttachments,
-        });
+        const res = await apiRequest("POST", "/api/notes", data);
 
         if (!res.ok) {
           const error = await res.text();
+          console.error("Server response error:", error);
           throw new Error(error);
         }
 
@@ -87,6 +83,7 @@ export default function HomePage() {
       });
     },
     onError: (error) => {
+      console.error("Errore mutation:", error);
       toast({
         title: "Errore",
         description: "Si è verificato un errore durante il salvataggio della nota",
@@ -94,6 +91,55 @@ export default function HomePage() {
       });
     },
   });
+
+  // Form submission handler
+  const onSubmit = async (data: FormData) => {
+    try {
+      console.log("Starting form submission with data:", {
+        title: data.title,
+        contentLength: data.content.length,
+        attachmentsCount: data.attachments?.length || 0
+      });
+
+      // Encrypt the content
+      const encryptedContent = encryptText(data.content, user!.password);
+      console.log("Content encrypted successfully");
+
+      // Process attachments
+      const attachments = form.getValues('attachments') || [];
+      console.log("Processing attachments:", attachments.length);
+
+      const processedAttachments: Attachment[] = await Promise.all(
+        attachments.map(async (file: File) => {
+          console.log("Processing attachment:", file.name);
+          const encryptedData = await encryptFile(file, user!.password);
+          return {
+            type: file.type.startsWith('image/') ? 'image' : 'video',
+            data: encryptedData.data,
+            fileName: file.name,
+            mimeType: file.type
+          };
+        })
+      );
+
+      console.log("All attachments processed successfully");
+
+      // Create the note with encrypted content and attachments
+      await createNoteMutation.mutateAsync({
+        title: data.title,
+        content: encryptedContent,
+        attachments: processedAttachments
+      });
+
+    } catch (error) {
+      console.error('Errore durante la criptazione:', error);
+      toast({
+        title: "Errore",
+        description: "Errore durante la criptazione dei dati",
+        variant: "destructive"
+      });
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
@@ -188,27 +234,7 @@ export default function HomePage() {
                 <DialogTitle className="font-mono text-white">CREATE NEW ENCRYPTED DOCUMENT</DialogTitle>
               </DialogHeader>
               <form
-                onSubmit={form.handleSubmit(async (data) => {
-                  try {
-                    const attachments = form.getValues('attachments') || [];
-                    const encryptedAttachments = await Promise.all(
-                      attachments.map(file => encryptFile(file, user!.password))
-                    );
-                    
-                    createNoteMutation.mutate({
-                      title: data.title,
-                      content: data.content,
-                      attachments: encryptedAttachments
-                    });
-                  } catch (error) {
-                    console.error('Errore durante la criptazione:', error);
-                    toast({
-                      title: "Errore",
-                      description: "Errore durante la criptazione dei file",
-                      variant: "destructive"
-                    });
-                  }
-                })}
+                onSubmit={form.handleSubmit(onSubmit)}
                 className="space-y-4"
               >
                 <div className="space-y-2">
@@ -356,3 +382,9 @@ export default function HomePage() {
     </div>
   );
 }
+
+type InsertNote = {
+  title: string;
+  content: string;
+  attachments: Attachment[];
+};
