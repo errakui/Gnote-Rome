@@ -41,21 +41,40 @@ export default function HomePage() {
 
   const createNoteMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      const encryptedContent = encryptText(data.content, user!.password);
+      try {
+        console.log("Starting note creation...");
+        const encryptedContent = encryptText(data.content, user!.password);
+        console.log("Content encrypted successfully");
 
-      let encryptedAttachments: Attachment[] = [];
-      if (data.attachments?.length) {
-        encryptedAttachments = await Promise.all(
-          data.attachments.map(file => encryptFile(file, user!.password))
-        );
+        let encryptedAttachments: Attachment[] = [];
+        if (data.attachments?.length) {
+          console.log(`Processing ${data.attachments.length} attachments...`);
+          encryptedAttachments = await Promise.all(
+            data.attachments.map(async file => {
+              const attachment = await encryptFile(file, user!.password);
+              console.log(`Attachment encrypted: ${file.name}`);
+              return attachment;
+            })
+          );
+        }
+
+        console.log("Sending request to server...");
+        const res = await apiRequest("POST", "/api/notes", {
+          title: data.title,
+          content: encryptedContent,
+          attachments: encryptedAttachments,
+        });
+
+        if (!res.ok) {
+          const error = await res.text();
+          throw new Error(`Failed to create note: ${error}`);
+        }
+
+        return res.json();
+      } catch (error) {
+        console.error("Error in createNoteMutation:", error);
+        throw error;
       }
-
-      const res = await apiRequest("POST", "/api/notes", {
-        title: data.title,
-        content: encryptedContent,
-        attachments: encryptedAttachments,
-      });
-      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notes"] });
@@ -63,29 +82,6 @@ export default function HomePage() {
       form.reset();
     },
   });
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    const validFiles = files.filter(file =>
-      file.type.startsWith('image/') || file.type.startsWith('video/')
-    );
-
-    const newPreviews = validFiles.map(file => ({
-      file,
-      preview: URL.createObjectURL(file)
-    }));
-
-    setPreviewFiles(prev => [...prev, ...newPreviews]);
-    form.setValue('attachments', validFiles);
-  };
-
-  const removeFile = (index: number) => {
-    setPreviewFiles(prev => prev.filter((_, i) => i !== index));
-    const currentFiles = form.getValues('attachments') || [];
-    form.setValue('attachments',
-      currentFiles.filter((_, i) => i !== index)
-    );
-  };
 
   if (isLoading) {
     return (
@@ -104,7 +100,7 @@ export default function HomePage() {
         <div className="container flex items-center justify-between h-16">
           <div className="flex items-center space-x-2">
             <Shield className="h-6 w-6" />
-            <h1 className="text-lg font-bold">SECURE NOTES v1.0</h1>
+            <h1 className="text-lg font-bold">GNOTE v1.0</h1>
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-zinc-400">

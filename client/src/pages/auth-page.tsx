@@ -41,7 +41,7 @@ export default function AuthPage() {
           <TabsContent value="login">
             <Card className="border-zinc-800 bg-zinc-900">
               <CardHeader>
-                <CardTitle className="font-mono text-xl">SYSTEM LOGIN</CardTitle>
+                <CardTitle className="font-mono text-xl">ACCESSO GNOTE</CardTitle>
               </CardHeader>
               <CardContent>
                 <form
@@ -85,7 +85,7 @@ export default function AuthPage() {
           <TabsContent value="register">
             <Card className="border-zinc-800 bg-zinc-900">
               <CardHeader>
-                <CardTitle className="font-mono text-xl">NEW USER REGISTRATION</CardTitle>
+                <CardTitle className="font-mono text-xl">REGISTRAZIONE GNOTE</CardTitle>
               </CardHeader>
               <CardContent>
                 <form
@@ -137,12 +137,12 @@ export default function AuthPage() {
             <div className="absolute inset-0 animate-pulse opacity-50" />
           </div>
           <h1 className="text-4xl font-bold tracking-tighter font-mono">
-            SECURE NOTES v1.0
+            GNOTE v1.0
           </h1>
           <p className="text-zinc-400 font-mono leading-relaxed">
-            MILITARY-GRADE ENCRYPTION // AES-256<br />
-            CLIENT-SIDE CRYPTOGRAPHY<br />
-            ZERO-KNOWLEDGE ARCHITECTURE
+            CRITTOGRAFIA MILITARE // AES-256<br />
+            CRIPTAZIONE LATO CLIENT<br />
+            ARCHITETTURA ZERO-KNOWLEDGE
           </p>
         </div>
       </div>

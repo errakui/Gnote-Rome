@@ -46,11 +46,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createNote(userId: number, insertNote: InsertNote): Promise<Note> {
-    const [note] = await db
-      .insert(notes)
-      .values({ ...insertNote, userId })
-      .returning();
-    return note;
+    console.log("Creating note for user:", userId, "with data:", {
+      ...insertNote,
+      content: insertNote.content.substring(0, 20) + "...", // Log only first 20 chars of content
+      attachments: insertNote.attachments?.length || 0
+    });
+
+    try {
+      const [note] = await db
+        .insert(notes)
+        .values({ ...insertNote, userId })
+        .returning();
+      console.log("Note created successfully:", note.id);
+      return note;
+    } catch (error) {
+      console.error("Error creating note:", error);
+      throw error;
+    }
   }
 }
 
