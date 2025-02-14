@@ -8,7 +8,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertUserSchema, type InsertUser } from "@shared/schema";
 import { Redirect } from "wouter";
-import { Loader2, LockKeyhole } from "lucide-react";
+import { Loader2, LockKeyhole, Binary } from "lucide-react";
 
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
@@ -26,18 +26,22 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen flex bg-background font-mono">
+    <div className="min-h-screen flex bg-black text-white font-mono">
       <div className="flex-1 flex items-center justify-center p-4">
         <Tabs defaultValue="login" className="w-full max-w-md">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="login">Login</TabsTrigger>
-            <TabsTrigger value="register">Register</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 bg-zinc-900">
+            <TabsTrigger value="login" className="data-[state=active]:bg-white data-[state=active]:text-black">
+              LOGIN
+            </TabsTrigger>
+            <TabsTrigger value="register" className="data-[state=active]:bg-white data-[state=active]:text-black">
+              REGISTER
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="login">
-            <Card>
+            <Card className="border-zinc-800 bg-zinc-900">
               <CardHeader>
-                <CardTitle>Login</CardTitle>
+                <CardTitle className="font-mono text-xl">SYSTEM LOGIN</CardTitle>
               </CardHeader>
               <CardContent>
                 <form
@@ -45,31 +49,33 @@ export default function AuthPage() {
                   className="space-y-4"
                 >
                   <div className="space-y-2">
-                    <Label htmlFor="username">Username</Label>
+                    <Label htmlFor="username">USERNAME</Label>
                     <Input
                       id="username"
                       {...loginForm.register("username")}
-                      className="font-mono"
+                      className="font-mono bg-black border-zinc-700"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
+                    <Label htmlFor="password">PASSWORD</Label>
                     <Input
                       id="password"
                       type="password"
                       {...loginForm.register("password")}
-                      className="font-mono"
+                      className="font-mono bg-black border-zinc-700"
                     />
                   </div>
                   <Button
                     type="submit"
-                    className="w-full"
+                    className="w-full bg-white text-black hover:bg-zinc-200"
                     disabled={loginMutation.isPending}
                   >
                     {loginMutation.isPending ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : null}
-                    Login
+                    ) : (
+                      <Binary className="mr-2 h-4 w-4" />
+                    )}
+                    INITIALIZE SESSION
                   </Button>
                 </form>
               </CardContent>
@@ -77,9 +83,9 @@ export default function AuthPage() {
           </TabsContent>
 
           <TabsContent value="register">
-            <Card>
+            <Card className="border-zinc-800 bg-zinc-900">
               <CardHeader>
-                <CardTitle>Register</CardTitle>
+                <CardTitle className="font-mono text-xl">NEW USER REGISTRATION</CardTitle>
               </CardHeader>
               <CardContent>
                 <form
@@ -89,31 +95,33 @@ export default function AuthPage() {
                   className="space-y-4"
                 >
                   <div className="space-y-2">
-                    <Label htmlFor="reg-username">Username</Label>
+                    <Label htmlFor="reg-username">USERNAME</Label>
                     <Input
                       id="reg-username"
                       {...registerForm.register("username")}
-                      className="font-mono"
+                      className="font-mono bg-black border-zinc-700"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="reg-password">Password</Label>
+                    <Label htmlFor="reg-password">PASSWORD</Label>
                     <Input
                       id="reg-password"
                       type="password"
                       {...registerForm.register("password")}
-                      className="font-mono"
+                      className="font-mono bg-black border-zinc-700"
                     />
                   </div>
                   <Button
                     type="submit"
-                    className="w-full"
+                    className="w-full bg-white text-black hover:bg-zinc-200"
                     disabled={registerMutation.isPending}
                   >
                     {registerMutation.isPending ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : null}
-                    Register
+                    ) : (
+                      <Binary className="mr-2 h-4 w-4" />
+                    )}
+                    CREATE NEW USER
                   </Button>
                 </form>
               </CardContent>
@@ -122,15 +130,19 @@ export default function AuthPage() {
         </Tabs>
       </div>
 
-      <div className="hidden lg:flex flex-1 items-center justify-center bg-muted p-12">
+      <div className="hidden lg:flex flex-1 items-center justify-center bg-zinc-900 p-12">
         <div className="max-w-lg space-y-6 text-center">
-          <LockKeyhole className="mx-auto h-24 w-24" />
-          <h1 className="text-4xl font-bold tracking-tighter">
-            Secure Notes
+          <div className="relative">
+            <LockKeyhole className="mx-auto h-24 w-24" />
+            <div className="absolute inset-0 animate-pulse opacity-50" />
+          </div>
+          <h1 className="text-4xl font-bold tracking-tighter font-mono">
+            SECURE NOTES v1.0
           </h1>
-          <p className="text-muted-foreground">
-            Your thoughts, encrypted and secure. All notes are protected with
-            military-grade AES-256 encryption before being stored.
+          <p className="text-zinc-400 font-mono leading-relaxed">
+            MILITARY-GRADE ENCRYPTION // AES-256<br />
+            CLIENT-SIDE CRYPTOGRAPHY<br />
+            ZERO-KNOWLEDGE ARCHITECTURE
           </p>
         </div>
       </div>

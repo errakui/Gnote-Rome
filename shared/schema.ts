@@ -1,4 +1,5 @@
-import { pgTable, text, serial, timestamp } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { text, serial, timestamp, pgTable } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -10,23 +11,26 @@ export const users = pgTable("users", {
 
 export const notes = pgTable("notes", {
   id: serial("id").primaryKey(),
-  userId: serial("user_id").references(() => users.id),
   title: text("title").notNull(),
   content: text("content").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
+  userId: serial("user_id")
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
+// Schema per la validazione dell'input
+export const insertUserSchema = createInsertSchema(users).extend({
+  password: z.string().min(6, "La password deve essere di almeno 6 caratteri"),
 });
 
-export const insertNoteSchema = createInsertSchema(notes).pick({
-  title: true,
-  content: true,
-});
+export const insertNoteSchema = createInsertSchema(notes, {
+  title: z.string().min(1, "Il titolo è obbligatorio"),
+  content: z.string().min(1, "Il contenuto è obbligatorio"),
+}).omit({ userId: true, createdAt: true });
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
+// Types
 export type User = typeof users.$inferSelect;
+export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Note = typeof notes.$inferSelect;
 export type InsertNote = z.infer<typeof insertNoteSchema>;

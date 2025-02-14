@@ -16,7 +16,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { encryptText, decryptText } from "@/lib/crypto";
 import { Label } from "@/components/ui/label";
-import { LogOut, Plus, Loader2 } from "lucide-react";
+import { LogOut, Plus, Loader2, Lock, Shield, Binary } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function HomePage() {
@@ -45,25 +45,32 @@ export default function HomePage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin" />
+      <div className="flex items-center justify-center min-h-screen bg-black">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-12 w-12 animate-spin mx-auto text-white" />
+          <p className="text-white font-mono">INITIALIZING SYSTEM...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background font-mono">
-      <header className="border-b">
+    <div className="min-h-screen bg-black text-white font-mono">
+      <header className="border-b border-zinc-800">
         <div className="container flex items-center justify-between h-16">
-          <h1 className="text-lg font-bold">Secure Notes</h1>
+          <div className="flex items-center space-x-2">
+            <Shield className="h-6 w-6" />
+            <h1 className="text-lg font-bold">SECURE NOTES v1.0</h1>
+          </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">
-              {user?.username}
+            <span className="text-sm text-zinc-400">
+              USER: {user?.username}
             </span>
             <Button
               variant="ghost"
               size="icon"
               onClick={() => logoutMutation.mutate()}
+              className="hover:bg-zinc-800"
             >
               <LogOut className="h-4 w-4" />
             </Button>
@@ -72,44 +79,54 @@ export default function HomePage() {
       </header>
 
       <main className="container py-8">
-        <div className="flex justify-between mb-8">
-          <h2 className="text-2xl font-bold">Your Notes</h2>
+        <div className="flex justify-between items-center mb-8">
+          <div className="flex items-center space-x-2">
+            <Lock className="h-6 w-6" />
+            <h2 className="text-xl font-bold">ENCRYPTED DOCUMENTS</h2>
+          </div>
           <Dialog>
             <DialogTrigger asChild>
-              <Button>
+              <Button className="bg-white text-black hover:bg-zinc-200">
                 <Plus className="mr-2 h-4 w-4" />
-                New Note
+                NEW DOCUMENT
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="bg-zinc-900 border-zinc-800">
               <DialogHeader>
-                <DialogTitle>Create New Note</DialogTitle>
+                <DialogTitle className="font-mono text-white">CREATE NEW ENCRYPTED DOCUMENT</DialogTitle>
               </DialogHeader>
               <form
                 onSubmit={form.handleSubmit((data) => createNoteMutation.mutate(data))}
                 className="space-y-4"
               >
                 <div className="space-y-2">
-                  <Label htmlFor="title">Title</Label>
-                  <Input id="title" {...form.register("title")} />
+                  <Label htmlFor="title">TITLE</Label>
+                  <Input 
+                    id="title" 
+                    {...form.register("title")} 
+                    className="bg-black border-zinc-700"
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="content">Content</Label>
+                  <Label htmlFor="content">CONTENT</Label>
                   <Textarea
                     id="content"
                     {...form.register("content")}
                     rows={5}
+                    className="bg-black border-zinc-700 font-mono"
                   />
                 </div>
                 <Button
                   type="submit"
-                  className="w-full"
+                  className="w-full bg-white text-black hover:bg-zinc-200"
                   disabled={createNoteMutation.isPending}
                 >
                   {createNoteMutation.isPending ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : null}
-                  Save Note
+                  ) : (
+                    <Binary className="mr-2 h-4 w-4" />
+                  )}
+                  ENCRYPT AND SAVE
                 </Button>
               </form>
             </DialogContent>
@@ -118,17 +135,26 @@ export default function HomePage() {
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {notes.map((note) => (
-            <Card key={note.id} className="overflow-hidden">
+            <Card key={note.id} className="bg-zinc-900 border-zinc-800">
               <CardHeader>
-                <CardTitle>{note.title}</CardTitle>
+                <CardTitle className="font-mono flex items-center space-x-2">
+                  <Lock className="h-4 w-4" />
+                  <span>{note.title}</span>
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="whitespace-pre-wrap">
+                <p className="whitespace-pre-wrap font-mono text-zinc-300">
                   {decryptText(note.content, user!.password)}
                 </p>
               </CardContent>
             </Card>
           ))}
+          {notes.length === 0 && (
+            <div className="col-span-full text-center py-12 text-zinc-500">
+              <Lock className="h-12 w-12 mx-auto mb-4" />
+              <p className="font-mono">NO ENCRYPTED DOCUMENTS FOUND</p>
+            </div>
+          )}
         </div>
       </main>
     </div>
