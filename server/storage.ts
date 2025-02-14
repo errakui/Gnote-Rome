@@ -54,6 +54,21 @@ export class DatabaseStorage implements IStorage {
     });
 
     try {
+      // Validazione base dei dati
+      if (!insertNote.title || !insertNote.content) {
+        throw new Error("Titolo e contenuto sono obbligatori");
+      }
+
+      // Controllo dimensione allegati
+      if (insertNote.attachments) {
+        const totalSize = insertNote.attachments.reduce((sum, att) => sum + att.data.length, 0);
+        console.log("Dimensione totale allegati:", totalSize / 1024 / 1024, "MB");
+
+        if (totalSize > 10 * 1024 * 1024) { // 10MB in bytes
+          throw new Error("La dimensione totale degli allegati supera i 10MB");
+        }
+      }
+
       const [note] = await db
         .insert(notes)
         .values({
@@ -73,7 +88,7 @@ export class DatabaseStorage implements IStorage {
       return note;
     } catch (error) {
       console.error("Errore durante la creazione della nota:", error);
-      throw new Error("Errore durante il salvataggio della nota");
+      throw error; // Rilanciamo l'errore originale per mantenere il messaggio
     }
   }
 }

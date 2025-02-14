@@ -28,19 +28,30 @@ export function registerRoutes(app: Express): Server {
         hasAttachments: Boolean(req.body.attachments?.length)
       });
 
-      // Log request size
-      const contentLength = req.get('content-length');
+      // Verifica dimensione richiesta
+      const contentLength = parseInt(req.get('content-length') || '0');
+      const limit = 10 * 1024 * 1024; // 10MB in bytes
+
       console.log("Request size:", {
         contentLength,
-        limit: req.app.get('json limit')
+        limit,
+        exceedsLimit: contentLength > limit
       });
 
+      if (contentLength > limit) {
+        return res.status(413).json({
+          error: "La dimensione totale della richiesta supera il limite di 10MB"
+        });
+      }
+
+      // Log dettagli allegati
       if (req.body.attachments) {
-        console.log("Attachments info:", req.body.attachments.map(att => ({
+        const attachmentsInfo = req.body.attachments.map(att => ({
           type: att.type,
           fileSize: att.data.length,
           fileName: att.fileName
-        })));
+        }));
+        console.log("Attachments info:", attachmentsInfo);
       }
 
       const note = await storage.createNote(req.user.id, req.body);
@@ -48,7 +59,9 @@ export function registerRoutes(app: Express): Server {
       res.status(201).json(note);
     } catch (error) {
       console.error("Error creating note:", error);
-      res.status(500).json({ error: "Failed to create note" });
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to create note" 
+      });
     }
   });
 
