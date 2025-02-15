@@ -49,11 +49,7 @@ export default function HomePage() {
   });
 
   const createNoteMutation = useMutation({
-    mutationFn: async (data: {
-      title: string;
-      content: string;
-      attachments?: Attachment[];
-    }) => {
+    mutationFn: async (data: FormData) => {
       const res = await apiRequest("POST", "/api/notes", data);
       if (!res.ok) {
         const errorText = await res.text();
@@ -65,6 +61,7 @@ export default function HomePage() {
       queryClient.invalidateQueries({ queryKey: ["/api/notes"] });
       setPreviewFiles([]);
       form.reset();
+      setShowCreateNote(false);
       toast({
         title: "Successo",
         description: "Nota salvata con successo",
@@ -81,7 +78,7 @@ export default function HomePage() {
 
   const onSubmit = async (formData: FormData) => {
     try {
-      if (!formData.title || !formData.content) {
+      if (!formData.get('title') || !formData.get('content')) {
         toast({
           title: "Errore",
           description: "Titolo e contenuto sono obbligatori",
@@ -90,43 +87,14 @@ export default function HomePage() {
         return;
       }
 
-      if (!user) {
-        toast({
-          title: "Errore",
-          description: "Devi essere autenticato per creare una nota",
-          variant: "destructive"
+      const files = Array.from(formData.getAll('attachments') as File[]);
+      if (files.length > 0) {
+        files.forEach(file => {
+          formData.append('files', file);
         });
-        return;
       }
 
-      const encryptedContent = encryptText(formData.content, user.password);
-
-      let attachments: Attachment[] = [];
-      if (formData.attachments && formData.attachments.length > 0) {
-        attachments = await Promise.all(
-          formData.attachments.map(async (file: File) => {
-            try {
-              const encryptedData = await encryptFile(file, user.password);
-              return {
-                type: file.type.startsWith('image/') ? ('image' as const) : ('video' as const),
-                data: encryptedData.data,
-                fileName: file.name,
-                mimeType: file.type
-              };
-            } catch (error) {
-              console.error('Errore nella crittografia del file:', error);
-              throw new Error(`Errore nel processare il file ${file.name}`);
-            }
-          })
-        );
-      }
-
-      await createNoteMutation.mutateAsync({
-        title: formData.title,
-        content: encryptedContent,
-        attachments: attachments.length > 0 ? attachments : undefined
-      });
-
+      await createNoteMutation.mutateAsync(formData);
     } catch (error) {
       console.error('Errore durante il salvataggio:', error);
       toast({
@@ -238,35 +206,7 @@ export default function HomePage() {
                 </Button>
               </div>
               <div className="flex-1 overflow-y-auto p-6">
-                <form onSubmit={form.handleSubmit(async (data) => {
-                  if (!user?.password) return;
-                  try {
-                    const encryptedContent = encryptText(data.content, user.password);
-                    const encryptedAttachments = await Promise.all(
-                      (data.attachments || []).map(file => encryptFile(file, user.password))
-                    );
-
-                    const res = await apiRequest("POST", "/api/notes", {
-                      title: data.title,
-                      content: encryptedContent,
-                      attachments: encryptedAttachments
-                    });
-
-                    if (!res.ok) throw new Error("Errore durante il salvataggio");
-
-                    queryClient.invalidateQueries({ queryKey: ["/api/notes"] });
-                    setShowCreateNote(false);
-                    form.reset();
-                    setPreviewFiles([]);
-                    toast({ title: "Successo", description: "Nota creata" });
-                  } catch (error) {
-                    toast({
-                      title: "Errore",
-                      description: error instanceof Error ? error.message : "Errore sconosciuto",
-                      variant: "destructive"
-                    });
-                  }
-                })} className="space-y-6">
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                   <div className="space-y-2">
                     <Label htmlFor="title">Titolo</Label>
                     <Input
@@ -290,34 +230,13 @@ export default function HomePage() {
                       id="file-upload"
                       multiple
                       accept="image/*,video/*"
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files || []);
-                        const maxSize = 5 * 1024 * 1024; // 5MB limit
-
-                        const validFiles = files.filter(file => {
-                          if (file.size > maxSize) {
-                            toast({
-                              title: "File troppo grande",
-                              description: `${file.name} supera il limite di 5MB`,
-                              variant: "destructive"
-                            });
-                            return false;
-                          }
-                          return file.type.startsWith('image/') || file.type.startsWith('video/');
-                        });
-
-                        form.setValue('attachments', validFiles);
-                        setPreviewFiles(validFiles.map(file => ({
-                          file,
-                          preview: URL.createObjectURL(file)
-                        })));
-                      }}
+                      onChange={handleFileChange}
                     />
                     <label htmlFor="file-upload" className="cursor-pointer">
                       <div className="border-2 border-dashed border-zinc-700 rounded-lg p-6 text-center hover:border-zinc-500">
                         <Plus className="mx-auto h-12 w-12 text-zinc-400" />
                         <p className="mt-2 text-sm text-zinc-400">
-                          Aggiungi media (max 5MB per file)
+                          Aggiungi media (max 10MB per file)
                         </p>
                       </div>
                     </label>
@@ -341,13 +260,7 @@ export default function HomePage() {
                           )}
                           <button
                             type="button"
-                            onClick={() => {
-                              const newFiles = [...previewFiles];
-                              URL.revokeObjectURL(preview);
-                              newFiles.splice(index, 1);
-                              setPreviewFiles(newFiles);
-                              form.setValue('attachments', newFiles.map(f => f.file));
-                            }}
+                            onClick={() => removeFile(index)}
                             className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1"
                           >
                             <X className="h-4 w-4" />

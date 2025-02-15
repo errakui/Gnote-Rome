@@ -11,7 +11,6 @@ import {
   Save,
   X,
   Plus,
-  X as XIcon,
   Loader2,
 } from "lucide-react";
 import {
@@ -24,6 +23,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useAuth } from "@/hooks/use-auth";
+import { decryptText } from "@/lib/crypto";
 
 interface Props {
   noteId: number;
@@ -32,6 +33,7 @@ interface Props {
 
 export function NoteViewer({ noteId, onClose }: Props) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [editContent, setEditContent] = useState("");
@@ -39,11 +41,6 @@ export function NoteViewer({ noteId, onClose }: Props) {
 
   const { data: note, isLoading } = useQuery<Note>({
     queryKey: ["/api/notes", noteId],
-    onSuccess: (data) => {
-      if (data?.content) {
-        setEditContent(data.content);
-      }
-    }
   });
 
   const updateMutation = useMutation({
@@ -54,43 +51,16 @@ export function NoteViewer({ noteId, onClose }: Props) {
       content: string;
       files?: File[];
     }) => {
-      let updatedAttachments = note?.attachments ? [...note.attachments] : [];
+      const formData = new FormData();
+      formData.append('content', content);
 
       if (files?.length) {
-        // Creiamo oggetti FormData per caricare i file
-        const formData = new FormData();
         files.forEach((file) => {
           formData.append('files', file);
         });
-
-        // Carichiamo i file e otteniamo gli URL
-        const uploadRes = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData
-        });
-
-        if (!uploadRes.ok) {
-          throw new Error('Errore nel caricamento dei file');
-        }
-
-        const uploadedFiles = await uploadRes.json();
-
-        const newAttachments = uploadedFiles.map((file: { url: string, filename: string, type: string, size: number }) => ({
-          type: file.type.startsWith("image/") ? "image" : "video",
-          url: file.url,
-          fileName: file.filename,
-          mimeType: file.type,
-          size: file.size
-        }));
-
-        updatedAttachments = [...updatedAttachments, ...newAttachments];
       }
 
-      const res = await apiRequest("PATCH", `/api/notes/${noteId}`, {
-        content,
-        attachments: updatedAttachments,
-      });
-
+      const res = await apiRequest("PATCH", `/api/notes/${noteId}`, formData);
       if (!res.ok) {
         const error = await res.text();
         throw new Error(error || "Errore durante l'aggiornamento");
@@ -108,8 +78,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
     onError: (error) => {
       toast({
         title: "Errore",
-        description:
-          error instanceof Error ? error.message : "Errore sconosciuto",
+        description: error instanceof Error ? error.message : "Errore sconosciuto",
         variant: "destructive",
       });
     },
@@ -134,21 +103,6 @@ export function NoteViewer({ noteId, onClose }: Props) {
     setNewAttachments((prev) => [...prev, ...validFiles]);
   };
 
-  const handleSave = () => {
-    if (!editContent.trim()) {
-      toast({
-        title: "Errore",
-        description: "Il contenuto non può essere vuoto",
-        variant: "destructive",
-      });
-      return;
-    }
-    updateMutation.mutate({
-      content: editContent,
-      files: newAttachments.length > 0 ? newAttachments : undefined,
-    });
-  };
-
   const deleteMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("DELETE", `/api/notes/${noteId}`);
@@ -162,8 +116,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
     onError: (error) => {
       toast({
         title: "Errore",
-        description:
-          error instanceof Error ? error.message : "Errore sconosciuto",
+        description: error instanceof Error ? error.message : "Errore sconosciuto",
         variant: "destructive",
       });
     },
@@ -177,14 +130,33 @@ export function NoteViewer({ noteId, onClose }: Props) {
     );
   }
 
+  const decryptedContent = note.content && user?.password ? 
+    decryptText(note.content, user.password) : 
+    'Errore nella decrittazione';
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-black text-white">
       <div className="flex justify-between items-center p-6 border-b border-zinc-800">
-        <h2 className="text-2xl font-bold">{note.title}</h2>
         <div className="flex gap-2">
-          {isEditing ? (
+          {!isEditing && (
             <>
-              <Button onClick={handleSave} disabled={updateMutation.isPending}>
+              <Button variant="outline" onClick={() => setIsEditing(true)} className="hover:bg-zinc-800">
+                <Edit2 className="h-4 w-4 mr-2" />
+                Modifica
+              </Button>
+              <Button variant="destructive" onClick={() => setShowDeleteDialog(true)}>
+                <Trash2 className="h-4 w-4 mr-2" />
+                Elimina
+              </Button>
+            </>
+          )}
+          {isEditing && (
+            <>
+              <Button onClick={() => updateMutation.mutate({
+                content: editContent,
+                files: newAttachments.length > 0 ? newAttachments : undefined,
+              })} disabled={updateMutation.isPending}
+              className="hover:bg-zinc-700">
                 {updateMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 ) : (
@@ -196,87 +168,63 @@ export function NoteViewer({ noteId, onClose }: Props) {
                 variant="outline"
                 onClick={() => {
                   setIsEditing(false);
-                  setEditContent(note.content);
+                  setEditContent(decryptedContent);
                   setNewAttachments([]);
                 }}
+                className="hover:bg-zinc-800"
               >
                 <X className="h-4 w-4 mr-2" />
                 Annulla
               </Button>
             </>
-          ) : (
-            <>
-              <Button variant="outline" onClick={() => setIsEditing(true)}>
-                <Edit2 className="h-4 w-4 mr-2" />
-                Modifica
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => setShowDeleteDialog(true)}
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Elimina
-              </Button>
-            </>
           )}
         </div>
+        <Button variant="ghost" onClick={onClose} size="icon" className="hover:bg-zinc-800">
+          <X className="h-4 w-4" />
+        </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {isEditing ? (
           <div className="space-y-6">
             <Textarea
-              value={editContent}
+              value={editContent || decryptedContent}
               onChange={(e) => setEditContent(e.target.value)}
               className="w-full min-h-[300px] text-lg bg-zinc-800 border-zinc-700"
               placeholder="Contenuto della nota..."
             />
 
-            <div>
-              <input
-                type="file"
-                className="hidden"
-                id="file-upload"
-                multiple
-                accept="image/*,video/*"
-                onChange={handleFileChange}
-              />
-              <label htmlFor="file-upload" className="cursor-pointer">
-                <div className="border-2 border-dashed border-zinc-700 rounded-lg p-6 text-center hover:border-zinc-500">
-                  <Plus className="mx-auto h-12 w-12 text-zinc-400" />
-                  <p className="mt-2 text-sm text-zinc-400">
-                    Aggiungi media (max 5MB per file)
-                  </p>
-                </div>
-              </label>
-            </div>
+            <input
+              type="file"
+              className="hidden"
+              id="file-upload"
+              multiple
+              accept="image/*,video/*"
+              onChange={handleFileChange}
+            />
+            <label htmlFor="file-upload" className="cursor-pointer block">
+              <div className="border-2 border-dashed border-zinc-700 rounded-lg p-6 text-center hover:border-zinc-500">
+                <Plus className="mx-auto h-12 w-12 text-zinc-400" />
+                <p className="mt-2 text-sm text-zinc-400">
+                  Aggiungi media (max 5MB per file)
+                </p>
+              </div>
+            </label>
 
             {newAttachments.length > 0 && (
-              <div className="grid grid-cols-2 gap-4 mt-4">
+              <div className="grid grid-cols-2 gap-4">
                 {newAttachments.map((file, index) => (
                   <div key={index} className="relative">
-                    {file.type.startsWith("image/") ? (
-                      <img
-                        src={URL.createObjectURL(file)}
-                        alt={file.name}
-                        className="w-full h-40 object-cover rounded-lg"
-                      />
-                    ) : (
-                      <video
-                        src={URL.createObjectURL(file)}
-                        className="w-full h-40 object-cover rounded-lg"
-                        controls
-                      />
-                    )}
+                    <img
+                      src={URL.createObjectURL(file)}
+                      alt={file.name}
+                      className="w-full h-40 object-cover rounded-lg"
+                    />
                     <button
-                      onClick={() =>
-                        setNewAttachments((prev) =>
-                          prev.filter((_, i) => i !== index)
-                        )
-                      }
-                      className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1"
+                      onClick={() => setNewAttachments(prev => prev.filter((_, i) => i !== index))}
+                      className="absolute -top-2 -right-2 p-1 bg-red-500 rounded-full hover:bg-red-600"
                     >
-                      <XIcon className="h-4 w-4" />
+                      <X className="h-4 w-4" />
                     </button>
                   </div>
                 ))}
@@ -284,26 +232,29 @@ export function NoteViewer({ noteId, onClose }: Props) {
             )}
           </div>
         ) : (
-          <div className="space-y-6">
-            <div className="whitespace-pre-wrap text-lg">
-              {note.content}
+          <div className="space-y-8">
+            <div className="prose prose-invert max-w-none">
+              <div className="whitespace-pre-wrap text-lg mb-8">
+                {decryptedContent}
+              </div>
+              <h2 className="text-2xl font-bold mb-4">{note.title}</h2>
             </div>
 
             {note.attachments && note.attachments.length > 0 && (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4 mt-6">
                 {note.attachments.map((attachment, index) => (
-                  <div key={index}>
+                  <div key={index} className="relative group">
                     {attachment.type === "image" ? (
                       <img
                         src={attachment.url}
                         alt={attachment.fileName}
-                        className="w-full rounded-lg"
+                        className="w-full rounded-lg border border-zinc-800 transition-transform hover:scale-105"
                       />
                     ) : (
                       <video
                         src={attachment.url}
                         controls
-                        className="w-full rounded-lg"
+                        className="w-full rounded-lg border border-zinc-800"
                       />
                     )}
                   </div>
@@ -315,7 +266,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
       </div>
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="bg-zinc-900 border-zinc-800">
           <AlertDialogHeader>
             <AlertDialogTitle>Conferma eliminazione</AlertDialogTitle>
             <AlertDialogDescription>
@@ -323,7 +274,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annulla</AlertDialogCancel>
+            <AlertDialogCancel className="hover:bg-zinc-800">Annulla</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteMutation.mutate()}
               className="bg-red-500 hover:bg-red-600"
