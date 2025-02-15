@@ -30,6 +30,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [content, setContent] = useState("");
+  const [editContent, setEditContent] = useState("");
   const [newAttachments, setNewAttachments] = useState<File[]>([]);
   const [fileInputRef, setFileInputRef] = useState<HTMLInputElement | null>(null);
 
@@ -43,9 +44,11 @@ export function NoteViewer({ noteId, onClose }: Props) {
   });
 
   useEffect(() => {
-    if (note && user && !isEditing) {
+    if (note && user) {
       try {
-        setContent(decryptText(note.content, user.password));
+        const decrypted = decryptText(note.content, user.password);
+        setContent(decrypted);
+        setEditContent(decrypted);
       } catch (error) {
         console.error("Errore decrittazione:", error);
         toast({
@@ -55,7 +58,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
         });
       }
     }
-  }, [note, user, isEditing]);
+  }, [note, user]);
 
   const updateMutation = useMutation({
     mutationFn: async ({ content, attachments }: { content: string; attachments?: File[] }) => {
@@ -128,7 +131,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
   });
 
   const handleSave = () => {
-    if (!content.trim()) {
+    if (!editContent.trim()) {
       toast({
         title: "Errore",
         description: "Il contenuto non può essere vuoto",
@@ -136,7 +139,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
       });
       return;
     }
-    updateMutation.mutate({ content, attachments: newAttachments });
+    updateMutation.mutate({ content: editContent, attachments: newAttachments });
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -177,6 +180,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
               </Button>
               <Button variant="outline" onClick={() => {
                 setIsEditing(false);
+                setEditContent(content);
                 setNewAttachments([]);
               }}>
                 <X className="h-4 w-4 mr-2" />
@@ -204,8 +208,8 @@ export function NoteViewer({ noteId, onClose }: Props) {
         {isEditing ? (
           <div className="space-y-6">
             <Textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
               className="w-full min-h-[300px] text-lg bg-black/20"
               placeholder="Scrivi qui il contenuto della nota..."
             />
