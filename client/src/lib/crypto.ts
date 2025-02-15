@@ -26,11 +26,11 @@ export async function encryptFile(file: File, key: string): Promise<{
   mimeType: string;
   type: "image" | "video";
 }> {
-  const arrayBuffer = await file.arrayBuffer();
-  const base64 = btoa(
-    String.fromCharCode(...new Uint8Array(arrayBuffer))
+  const buffer = await file.arrayBuffer();
+  const base64String = btoa(
+    new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
   );
-  const encrypted = CryptoJS.AES.encrypt(base64, key).toString();
+  const encrypted = CryptoJS.AES.encrypt(base64String, key).toString();
 
   const type = file.type.startsWith('image/') ? 'image' : 'video';
 
