@@ -34,6 +34,7 @@ export default function HomePage() {
   const [previewFiles, setPreviewFiles] = useState<{ file: File; preview: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const [showCreateNote, setShowCreateNote] = useState(false);
 
   const form = useForm<FormData>({
     defaultValues: {
@@ -218,89 +219,136 @@ export default function HomePage() {
           </div>
         </div>
       </header>
-
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-8">
-          <div className="flex items-center space-x-2">
-            <Lock className="h-6 w-6" />
-            <h2 className="text-xl font-bold">NOTE CRIPTATE</h2>
-          </div>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button className="bg-white text-black hover:bg-zinc-200">
-                <Plus className="mr-2 h-4 w-4" />
-                NUOVA NOTA
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="bg-zinc-900 border-zinc-800">
-              <DialogHeader>
-                <DialogTitle className="font-mono text-white">CREA NUOVA NOTA CRIPTATA</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="title">TITOLO</Label>
-                  <Input
-                    id="title"
-                    {...form.register("title")}
-                    className="bg-black border-zinc-700"
-                  />
-                </div>
+          <h2 className="text-2xl font-bold font-mono">LE TUE NOTE</h2>
+          <Button onClick={() => setShowCreateNote(true)} className="flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            NUOVA NOTA
+          </Button>
+        </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="content">CONTENUTO</Label>
-                  <Textarea
-                    id="content"
-                    {...form.register("content")}
-                    rows={5}
-                    className="bg-black border-zinc-700 font-mono"
-                  />
-                </div>
+        <Dialog open={showCreateNote} onOpenChange={setShowCreateNote}>
+          <DialogContent className="max-w-[95vw] w-[95vw] h-[95vh] p-0 bg-zinc-900 border-zinc-800">
+            <div className="flex flex-col h-full">
+              <div className="flex justify-between items-center p-6 border-b border-zinc-800">
+                <h2 className="text-2xl font-bold">Nuova Nota</h2>
+                <Button variant="ghost" onClick={() => setShowCreateNote(false)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-6">
+                <form onSubmit={form.handleSubmit(async (data) => {
+                  if (!user?.password) return;
+                  try {
+                    const encryptedContent = encryptText(data.content, user.password);
+                    const encryptedAttachments = await Promise.all(
+                      (data.attachments || []).map(file => encryptFile(file, user.password))
+                    );
 
-                <div className="space-y-2">
-                  <Label>MEDIA</Label>
-                  <div
-                    className="border-2 border-dashed border-zinc-700 rounded-lg p-4 text-center cursor-pointer"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
+                    const res = await apiRequest("POST", "/api/notes", {
+                      title: data.title,
+                      content: encryptedContent,
+                      attachments: encryptedAttachments
+                    });
+
+                    if (!res.ok) throw new Error("Errore durante il salvataggio");
+
+                    queryClient.invalidateQueries({ queryKey: ["/api/notes"] });
+                    setShowCreateNote(false);
+                    form.reset();
+                    setPreviewFiles([]);
+                    toast({ title: "Successo", description: "Nota creata" });
+                  } catch (error) {
+                    toast({
+                      title: "Errore",
+                      description: error instanceof Error ? error.message : "Errore sconosciuto",
+                      variant: "destructive"
+                    });
+                  }
+                })} className="space-y-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="title">Titolo</Label>
+                    <Input
+                      id="title"
+                      {...form.register("title", { required: true })}
+                      className="bg-zinc-800 border-zinc-700"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="content">Contenuto</Label>
+                    <Textarea
+                      id="content"
+                      {...form.register("content", { required: true })}
+                      className="min-h-[200px] bg-zinc-800 border-zinc-700"
+                    />
+                  </div>
+                  <div>
                     <input
                       type="file"
-                      ref={fileInputRef}
                       className="hidden"
+                      id="file-upload"
                       multiple
                       accept="image/*,video/*"
-                      onChange={handleFileChange}
-                    />
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="flex gap-2">
-                        <Image className="h-6 w-6" />
-                        <Video className="h-6 w-6" />
-                      </div>
-                      <p className="text-sm text-zinc-400">
-                        CLICCA PER AGGIUNGERE IMMAGINI O VIDEO
-                      </p>
-                    </div>
-                  </div>
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        const maxSize = 5 * 1024 * 1024; // 5MB limit
 
+                        const validFiles = files.filter(file => {
+                          if (file.size > maxSize) {
+                            toast({
+                              title: "File troppo grande",
+                              description: `${file.name} supera il limite di 5MB`,
+                              variant: "destructive"
+                            });
+                            return false;
+                          }
+                          return file.type.startsWith('image/') || file.type.startsWith('video/');
+                        });
+
+                        form.setValue('attachments', validFiles);
+                        setPreviewFiles(validFiles.map(file => ({
+                          file,
+                          preview: URL.createObjectURL(file)
+                        })));
+                      }}
+                    />
+                    <label htmlFor="file-upload" className="cursor-pointer">
+                      <div className="border-2 border-dashed border-zinc-700 rounded-lg p-6 text-center hover:border-zinc-500">
+                        <Plus className="mx-auto h-12 w-12 text-zinc-400" />
+                        <p className="mt-2 text-sm text-zinc-400">
+                          Aggiungi media (max 5MB per file)
+                        </p>
+                      </div>
+                    </label>
+                  </div>
                   {previewFiles.length > 0 && (
-                    <div className="grid grid-cols-2 gap-2 mt-2">
-                      {previewFiles.map((file, index) => (
-                        <div key={index} className="relative group">
-                          {file.file.type.startsWith('image/') ? (
+                    <div className="grid grid-cols-2 gap-4">
+                      {previewFiles.map(({ file, preview }, index) => (
+                        <div key={index} className="relative">
+                          {file.type.startsWith('image/') ? (
                             <img
-                              src={file.preview}
-                              alt={file.file.name}
-                              className="w-full h-24 object-cover rounded-lg"
+                              src={preview}
+                              alt={file.name}
+                              className="w-full h-40 object-cover rounded-lg"
                             />
                           ) : (
                             <video
-                              src={file.preview}
-                              className="w-full h-24 object-cover rounded-lg"
+                              src={preview}
+                              className="w-full h-40 object-cover rounded-lg"
+                              controls
                             />
                           )}
                           <button
                             type="button"
-                            onClick={() => removeFile(index)}
-                            className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => {
+                              const newFiles = [...previewFiles];
+                              URL.revokeObjectURL(preview);
+                              newFiles.splice(index, 1);
+                              setPreviewFiles(newFiles);
+                              form.setValue('attachments', newFiles.map(f => f.file));
+                            }}
+                            className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1"
                           >
                             <X className="h-4 w-4" />
                           </button>
@@ -308,24 +356,14 @@ export default function HomePage() {
                       ))}
                     </div>
                   )}
-                </div>
-
-                <Button
-                  type="submit"
-                  className="w-full bg-white text-black hover:bg-zinc-200"
-                  disabled={createNoteMutation.isPending}
-                >
-                  {createNoteMutation.isPending ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Binary className="mr-2 h-4 w-4" />
-                  )}
-                  SALVA NOTA
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
+                  <Button type="submit" className="w-full">
+                    Salva Nota
+                  </Button>
+                </form>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {notes.map((note) => (
@@ -355,7 +393,7 @@ export default function HomePage() {
                     {user && (
                       <>
                         <p className="whitespace-pre-wrap font-mono text-zinc-300 mb-4 line-clamp-3">
-                          {note.content && user.password ? 
+                          {note.content && user.password ?
                             (() => {
                               try {
                                 return decryptText(note.content, user.password)
