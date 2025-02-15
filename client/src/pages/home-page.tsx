@@ -48,24 +48,7 @@ export default function HomePage() {
   });
 
   const createNoteMutation = useMutation({
-    mutationFn: async (data: FormData) => {
-      const formData = new FormData();
-
-      if (!user?.password) throw new Error("Password non trovata");
-
-      // Encrypt content before sending
-      const encryptedContent = encryptText(data.content, user.password);
-
-      formData.append('title', data.title);
-      formData.append('content', encryptedContent);
-
-      // Add files to formData
-      if (data.files?.length > 0) {
-        data.files.forEach((file) => {
-          formData.append('files', file);
-        });
-      }
-
+    mutationFn: async (formData: FormData) => {
       const res = await apiRequest("POST", "/api/notes", formData);
       if (!res.ok) {
         const errorText = await res.text();
@@ -86,21 +69,46 @@ export default function HomePage() {
     onError: (error: Error) => {
       toast({
         title: "Errore",
-        description: error instanceof Error ? error.message : "Errore nel salvataggio della nota",
+        description: error.message || "Errore nel salvataggio della nota",
         variant: "destructive",
       });
     },
   });
 
-  const onSubmit = async (formData: FormData) => {
+  const onSubmit = async (data: FormData) => {
     try {
-      if (!formData.title || !formData.content) {
+      if (!data.title || !data.content) {
         toast({
           title: "Errore",
           description: "Titolo e contenuto sono obbligatori",
           variant: "destructive"
         });
         return;
+      }
+
+      if (!user?.password) {
+        toast({
+          title: "Errore",
+          description: "Errore di autenticazione",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Create FormData object
+      const formData = new FormData();
+
+      // Encrypt and add content
+      const encryptedContent = encryptText(data.content, user.password);
+      formData.append('title', data.title);
+      formData.append('content', encryptedContent);
+
+      // Add files if present
+      const currentFiles = form.getValues('files');
+      if (currentFiles?.length > 0) {
+        currentFiles.forEach((file) => {
+          formData.append('files', file);
+        });
       }
 
       await createNoteMutation.mutateAsync(formData);
