@@ -44,39 +44,38 @@ export function NoteViewer({ noteId, onClose }: Props) {
       try {
         const decrypted = decryptText(data.content, user.password);
         setEditContent(decrypted);
-
-        if (data.attachments) {
-          const decryptedAtts = data.attachments.map(att => {
-            if (!att.data) return null;
-            try {
-              return {
-                data: decryptFile(att.data, user.password),
-                type: att.type,
-                mimeType: att.mimeType
-              };
-            } catch (error) {
-              console.error("Errore decrittazione allegato:", error);
-              toast({
-                title: "Errore",
-                description: "Errore nella decrittazione di un allegato",
-                variant: "destructive",
-              });
-              return null;
-            }
-          }).filter(Boolean);
-          setDecryptedAttachments(decryptedAtts);
+        
+        let decryptedAtts: { data: string; type: string; mimeType: string }[] = [];
+        if (data.attachments && data.attachments.length > 0) {
+          decryptedAtts = data.attachments
+            .map(att => {
+              if (!att.data) return null;
+              try {
+                return {
+                  data: decryptFile(att.data, user.password),
+                  type: att.type,
+                  mimeType: att.mimeType
+                };
+              } catch (error) {
+                console.error("Errore decrittazione allegato:", error);
+                return null;
+              }
+            })
+            .filter((att): att is { data: string; type: string; mimeType: string } => att !== null);
         }
+        setDecryptedAttachments(decryptedAtts);
       } catch (error) {
         console.error("Errore decrittazione nota:", error);
         toast({
-          title: "Errore Decrittazione",
-          description: "Impossibile decrittare la nota. Prova a ricaricare la pagina.",
+          title: "Errore",
+          description: "Errore nella decrittazione. Controlla la password.",
           variant: "destructive",
         });
       }
     },
-    retry: 1,
-    staleTime: 1000
+    staleTime: 30000,
+    cacheTime: 60000,
+    retry: 2
   });
 
   const updateMutation = useMutation({
