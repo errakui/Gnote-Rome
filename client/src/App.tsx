@@ -15,7 +15,7 @@ export default function App() {
       <AuthProvider>
         <Switch>
           <Route path="/auth" component={AuthPage} />
-          <ProtectedRoute path="/" component={HomePage} />
+          <Route path="/" component={HomePage} />
           <Route component={NotFound} />
         </Switch>
         <Toaster />
