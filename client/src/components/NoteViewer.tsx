@@ -40,11 +40,9 @@ export function NoteViewer({ noteId, onClose }: Props) {
   const { data: note, isLoading } = useQuery<Note>({
     queryKey: ["/api/notes", noteId],
     onSuccess: (data) => {
-      if (!data?.content) {
-        console.warn("Contenuto nota mancante");
-        return;
+      if (data?.content) {
+        setEditContent(data.content);
       }
-      setEditContent(data.content);
     }
   });
 
@@ -56,18 +54,35 @@ export function NoteViewer({ noteId, onClose }: Props) {
       content: string;
       files?: File[];
     }) => {
-      let updatedAttachments = [...(note?.attachments || [])];
+      let updatedAttachments = note?.attachments ? [...note.attachments] : [];
 
       if (files?.length) {
-        const newAttachments = await Promise.all(
-          files.map(async (file) => ({
-            type: file.type.startsWith("image/") ? "image" : "video",
-            url: URL.createObjectURL(file),
-            fileName: file.name,
-            mimeType: file.type,
-            size: file.size
-          }))
-        );
+        // Creiamo oggetti FormData per caricare i file
+        const formData = new FormData();
+        files.forEach((file) => {
+          formData.append('files', file);
+        });
+
+        // Carichiamo i file e otteniamo gli URL
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!uploadRes.ok) {
+          throw new Error('Errore nel caricamento dei file');
+        }
+
+        const uploadedFiles = await uploadRes.json();
+
+        const newAttachments = uploadedFiles.map((file: { url: string, filename: string, type: string, size: number }) => ({
+          type: file.type.startsWith("image/") ? "image" : "video",
+          url: file.url,
+          fileName: file.filename,
+          mimeType: file.type,
+          size: file.size
+        }));
+
         updatedAttachments = [...updatedAttachments, ...newAttachments];
       }
 
@@ -213,7 +228,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
             <Textarea
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
-              className="w-full min-h-[300px] text-lg"
+              className="w-full min-h-[300px] text-lg bg-zinc-800 border-zinc-700"
               placeholder="Contenuto della nota..."
             />
 
@@ -227,9 +242,11 @@ export function NoteViewer({ noteId, onClose }: Props) {
                 onChange={handleFileChange}
               />
               <label htmlFor="file-upload" className="cursor-pointer">
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400">
-                  <Plus className="mx-auto h-12 w-12 text-gray-400" />
-                  <p className="mt-2 text-sm text-gray-600">Aggiungi media</p>
+                <div className="border-2 border-dashed border-zinc-700 rounded-lg p-6 text-center hover:border-zinc-500">
+                  <Plus className="mx-auto h-12 w-12 text-zinc-400" />
+                  <p className="mt-2 text-sm text-zinc-400">
+                    Aggiungi media (max 5MB per file)
+                  </p>
                 </div>
               </label>
             </div>
@@ -269,7 +286,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
         ) : (
           <div className="space-y-6">
             <div className="whitespace-pre-wrap text-lg">
-              {note.content || "Nessun contenuto"}
+              {note.content}
             </div>
 
             {note.attachments && note.attachments.length > 0 && (
@@ -279,7 +296,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
                     {attachment.type === "image" ? (
                       <img
                         src={attachment.url}
-                        alt={`Allegato ${index + 1}`}
+                        alt={attachment.fileName}
                         className="w-full rounded-lg"
                       />
                     ) : (
