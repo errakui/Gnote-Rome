@@ -1,4 +1,4 @@
-import CryptoJS from 'crypto-js';
+import CryptoJS from "crypto-js";
 
 export function encryptText(text: string, key: string): string {
   if (!text) {
@@ -7,63 +7,120 @@ export function encryptText(text: string, key: string): string {
   if (!key) {
     throw new Error("Devi essere loggato per criptare le note");
   }
-  return CryptoJS.AES.encrypt(text, key).toString();
+  const keyString = CryptoJS.enc.Utf8.parse(key);
+  const iv = CryptoJS.lib.WordArray.random(16);
+  const encrypted = CryptoJS.AES.encrypt(text, keyString, {
+    mode: CryptoJS.mode.CBC,
+    padding: CryptoJS.pad.Pkcs7,
+    iv: iv,
+  });
+
+  return iv.concat(encrypted.ciphertext).toString(CryptoJS.enc.Base64);
 }
 
 export function decryptText(ciphertext: string, key: string): string {
   if (!ciphertext || !key) {
-    throw new Error("Testo cifrato e chiave sono richiesti per la decrittografia");
+    throw new Error(
+      "Testo cifrato e chiave sono richiesti per la decrittografia",
+    );
   }
-  const bytes = CryptoJS.AES.decrypt(ciphertext, key);
-  return bytes.toString(CryptoJS.enc.Utf8);
+  const keyString = CryptoJS.enc.Utf8.parse(key);
+  const combined = CryptoJS.enc.Base64.parse(ciphertext);
+  const iv = CryptoJS.lib.WordArray.create(combined.words.slice(0, 4));
+  const encryptedText = CryptoJS.lib.WordArray.create(combined.words.slice(4));
+
+  const decrypted = CryptoJS.AES.decrypt(
+    { ciphertext: encryptedText },
+    keyString,
+    {
+      mode: CryptoJS.mode.CBC,
+      padding: CryptoJS.pad.Pkcs7,
+      iv: iv,
+    },
+  );
+
+  return decrypted.toString(CryptoJS.enc.Utf8);
 }
 
-export function encryptFile(file: File, key: string): Promise<{ 
-  data: string; 
+export function encryptFile(
+  file: File,
+  key: string,
+): Promise<{
+  data: string;
   fileName: string;
   mimeType: string;
   type: "image" | "video";
 }> {
+  if (!file.type.match(/^(image|video)\//)) {
+    throw new Error("Tipo di file non supportato");
+  }
+
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
-    reader.onload = () => {
+    reader.onload = (event) => {
       try {
-        // Prendiamo solo la parte di dati dopo la virgola nel DataURL
-        const base64 = reader.result?.toString().split(',')[1] || '';
+        if (!event.target?.result) {
+          console.error("FileReader non ha prodotto risultati");
+          throw new Error("Errore nella lettura del file");
+        }
 
-        // Crittografiamo direttamente la stringa base64
-        const encrypted = CryptoJS.AES.encrypt(base64, key).toString();
+        const base64String = event.target.result.toString().split(",")[1];
+        const keyWordArray = CryptoJS.enc.Utf8.parse(key);
+        const dataWordArray = CryptoJS.enc.Base64.parse(base64String);
+        const iv = CryptoJS.lib.WordArray.random(16);
+
+        const encrypted = CryptoJS.AES.encrypt(dataWordArray, keyWordArray, {
+          mode: CryptoJS.mode.CBC,
+          padding: CryptoJS.pad.Pkcs7,
+          iv: iv,
+        });
+
+        const combined = iv
+          .concat(encrypted.ciphertext)
+          .toString(CryptoJS.enc.Base64);
 
         resolve({
-          data: encrypted,
+          data: combined,
           fileName: file.name,
           mimeType: file.type,
-          type: file.type.startsWith('image/') ? 'image' : 'video'
+          type: file.type.startsWith("image/") ? "image" : "video",
         });
       } catch (error) {
-        console.error('Errore durante la crittografia:', error);
+        console.error("[Debug] Errore dettagliato:", error);
         reject(new Error("Errore durante la crittografia del file"));
       }
     };
 
     reader.onerror = () => {
-      console.error('Errore nella lettura del file:', reader.error);
+      console.error("[Debug] Errore FileReader:", reader.error);
       reject(new Error("Errore nella lettura del file"));
     };
 
-    // Legge il file come DataURL (che include il tipo MIME)
     reader.readAsDataURL(file);
   });
 }
 
-export function decryptFile(encrypted: string, key: string): string {
+export function decryptFile(encryptedData: string, key: string): string {
   try {
-    // Decrittiamo per ottenere il base64 originale
-    const bytes = CryptoJS.AES.decrypt(encrypted, key);
-    return bytes.toString(CryptoJS.enc.Utf8);
+    const keyWordArray = CryptoJS.enc.Utf8.parse(key);
+    const combined = CryptoJS.enc.Base64.parse(encryptedData);
+    const iv = CryptoJS.lib.WordArray.create(combined.words.slice(0, 4));
+    const ciphertext = CryptoJS.lib.WordArray.create(combined.words.slice(4));
+
+    const decrypted = CryptoJS.AES.decrypt(
+      { ciphertext: ciphertext },
+      keyWordArray,
+      {
+        mode: CryptoJS.mode.CBC,
+        padding: CryptoJS.pad.Pkcs7,
+        iv: iv,
+      },
+    );
+
+    return decrypted.toString(CryptoJS.enc.Base64);
   } catch (error) {
-    console.error('Errore durante la decrittografia:', error);
+    console.error("[Debug] Errore decrittografia:", error);
     throw new Error("Errore durante la decrittografia del file");
   }
 }

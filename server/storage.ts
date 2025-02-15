@@ -23,7 +23,9 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   getNotes(userId: number): Promise<Note[]>;
+  getNote(noteId: number, userId: number): Promise<Note | undefined>;
   createNote(userId: number, note: InsertNote): Promise<Note>;
+  updateNote(noteId: number, userId: number, note: Partial<InsertNote>): Promise<Note | undefined>;
   sessionStore: session.Store;
 }
 
@@ -64,6 +66,25 @@ export class DatabaseStorage implements IStorage {
     const notesList = await db.select().from(notes).where(eq(notes.userId, userId));
     console.log("[Storage] Numero di note trovate:", notesList.length);
     return notesList;
+  }
+
+  async getNote(noteId: number, userId: number): Promise<Note | undefined> {
+    console.log("[Storage] Recupero nota ID:", noteId, "per utente ID:", userId);
+    const [note] = await db.select()
+      .from(notes)
+      .where(eq(notes.id, noteId))
+      .where(eq(notes.userId, userId));
+    return note;
+  }
+
+  async updateNote(noteId: number, userId: number, updateData: Partial<InsertNote>): Promise<Note | undefined> {
+    console.log("[Storage] Aggiornamento nota ID:", noteId, "per utente ID:", userId);
+    const [updated] = await db.update(notes)
+      .set(updateData)
+      .where(eq(notes.id, noteId))
+      .where(eq(notes.userId, userId))
+      .returning();
+    return updated;
   }
 
   async createNote(userId: number, insertNote: InsertNote): Promise<Note> {
