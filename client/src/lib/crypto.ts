@@ -32,32 +32,34 @@ export function encryptFile(file: File, key: string): Promise<{
     reader.onload = (event) => {
       try {
         if (!event.target?.result) {
+          console.error("FileReader non ha prodotto risultati");
           throw new Error("Errore nella lettura del file");
         }
 
+        console.log("[Debug] Tipo di file:", file.type);
         const base64String = event.target.result.toString().split(',')[1];
-        const keyString = CryptoJS.enc.Utf8.parse(key);
-        const wordArray = CryptoJS.enc.Base64.parse(base64String);
-        const encrypted = CryptoJS.AES.encrypt(wordArray, keyString, {
-          mode: CryptoJS.mode.ECB,
-          padding: CryptoJS.pad.Pkcs7
-        });
+        console.log("[Debug] Lunghezza base64:", base64String.length);
+
+        // Semplifichiamo il processo di crittografia
+        const encrypted = CryptoJS.AES.encrypt(base64String, key).toString();
+        console.log("[Debug] Crittografia completata, lunghezza:", encrypted.length);
 
         const type = file.type.startsWith('image/') ? 'image' : 'video';
 
         resolve({
-          data: encrypted.toString(),
+          data: encrypted,
           fileName: file.name,
           mimeType: file.type,
           type
         });
       } catch (error) {
-        console.error('Errore durante la crittografia:', error);
+        console.error('[Debug] Errore dettagliato:', error);
         reject(new Error("Errore durante la crittografia del file"));
       }
     };
 
     reader.onerror = () => {
+      console.error('[Debug] Errore FileReader:', reader.error);
       reject(new Error("Errore nella lettura del file"));
     };
 
@@ -70,14 +72,12 @@ export function decryptFile(
   key: string
 ): string {
   try {
-    const keyString = CryptoJS.enc.Utf8.parse(key);
-    const decrypted = CryptoJS.AES.decrypt(encryptedData, keyString, {
-      mode: CryptoJS.mode.ECB,
-      padding: CryptoJS.pad.Pkcs7
-    });
+    console.log("[Debug] Inizio decrittografia, lunghezza dati:", encryptedData.length);
+    const decrypted = CryptoJS.AES.decrypt(encryptedData, key);
+    console.log("[Debug] Decrittografia completata");
     return decrypted.toString(CryptoJS.enc.Base64);
   } catch (error) {
-    console.error('Errore durante la decrittografia:', error);
+    console.error('[Debug] Errore decrittografia:', error);
     throw new Error("Errore durante la decrittografia del file");
   }
 }
