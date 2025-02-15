@@ -52,11 +52,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw error;
       }
     },
-    staleTime: 4 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000, 
+    staleTime: 60 * 1000, // 1 minuto
+    refetchInterval: 2 * 60 * 1000, // 2 minuti 
     refetchOnWindowFocus: true,
-    retry: 3,
-    retryDelay: 1000
+    retry: 5,
+    retryDelay: attemptIndex => Math.min(1000 * (2 ** attemptIndex), 30000)
   });
 
   const loginMutation = useMutation({

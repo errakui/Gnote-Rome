@@ -29,13 +29,16 @@ export function decryptText(ciphertext: string, key: string): string {
   }
 
   try {
+    const keyString = CryptoJS.enc.Utf8.parse(key);
+    if (!keyString) {
+      console.error("[Crypto] Chiave di decrittazione non valida");
+      return "";
+    }
+    
     console.log("[Crypto] Tentativo decrittografia:", { 
       ciphertextLength: ciphertext.length, 
-      keyLength: key.length,
-      ciphertext: ciphertext.substring(0, 32) + "..."
+      keyLength: key.length
     });
-
-    const keyString = CryptoJS.enc.Utf8.parse(key);
     const combined = CryptoJS.enc.Base64.parse(ciphertext);
 
     if (combined.words.length < 4) {
