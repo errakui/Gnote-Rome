@@ -355,7 +355,17 @@ export default function HomePage() {
                     {user && (
                       <>
                         <p className="whitespace-pre-wrap font-mono text-zinc-300 mb-4 line-clamp-3">
-                          {note.content ? decryptText(note.content, user.password) : ''}
+                          {note.content && user.password ? 
+                            (() => {
+                              try {
+                                return decryptText(note.content, user.password)
+                              } catch (error) {
+                                console.error("Errore decrittazione:", error);
+                                return "Errore nella decrittazione del contenuto";
+                              }
+                            })()
+                            : 'Nessun contenuto'
+                          }
                         </p>
                         {note.attachments && note.attachments.length > 0 && (
                           <div className="flex gap-2 text-sm text-zinc-400">

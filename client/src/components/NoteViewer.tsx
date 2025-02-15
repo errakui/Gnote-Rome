@@ -36,7 +36,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
   const { data: note, isLoading } = useQuery<Note>({
     queryKey: ["/api/notes", noteId],
     onSuccess: (data) => {
-      if (data && user?.password) {
+      if (data?.content && user?.password) {
         try {
           const decrypted = decryptText(data.content, user.password);
           setEditContent(decrypted);
@@ -44,6 +44,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
           // Decripta gli allegati esistenti
           if (data.attachments) {
             const decrypted = data.attachments.map(att => {
+              if (!att.data) return null;
               try {
                 return {
                   data: decryptFile(att.data, user.password),
@@ -52,6 +53,11 @@ export function NoteViewer({ noteId, onClose }: Props) {
                 };
               } catch (error) {
                 console.error("Errore decrittazione allegato:", error);
+                toast({
+                  title: "Errore",
+                  description: `Errore nella decrittazione dell'allegato: ${error.message}`,
+                  variant: "destructive",
+                });
                 return null;
               }
             }).filter(Boolean);
@@ -61,7 +67,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
           console.error("Errore decrittazione:", error);
           toast({
             title: "Errore",
-            description: "Impossibile decrittare la nota",
+            description: `Errore nella decrittazione della nota: ${error.message}`,
             variant: "destructive",
           });
         }
@@ -285,7 +291,17 @@ export function NoteViewer({ noteId, onClose }: Props) {
         ) : (
           <div className="space-y-6">
             <div className="whitespace-pre-wrap text-lg">
-              {decryptText(note.content, user.password)}
+              {note.content && user.password ? 
+                (() => {
+                  try {
+                    return decryptText(note.content, user.password)
+                  } catch (error) {
+                    console.error("Errore decrittazione:", error);
+                    return "Errore nella decrittazione del contenuto";
+                  }
+                })()
+                : 'Nessun contenuto'
+              }
             </div>
 
             {decryptedAttachments.length > 0 && (
