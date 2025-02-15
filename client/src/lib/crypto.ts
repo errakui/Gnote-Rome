@@ -36,18 +36,24 @@ export function encryptFile(file: File, key: string): Promise<{
         }
 
         const base64String = event.target.result.toString().split(',')[1];
-        const encrypted = CryptoJS.AES.encrypt(base64String, key).toString();
+        const keyString = CryptoJS.enc.Utf8.parse(key);
+        const wordArray = CryptoJS.enc.Base64.parse(base64String);
+        const encrypted = CryptoJS.AES.encrypt(wordArray, keyString, {
+          mode: CryptoJS.mode.ECB,
+          padding: CryptoJS.pad.Pkcs7
+        });
 
         const type = file.type.startsWith('image/') ? 'image' : 'video';
 
         resolve({
-          data: encrypted,
+          data: encrypted.toString(),
           fileName: file.name,
           mimeType: file.type,
           type
         });
       } catch (error) {
-        reject(error);
+        console.error('Errore durante la crittografia:', error);
+        reject(new Error("Errore durante la crittografia del file"));
       }
     };
 
@@ -63,6 +69,15 @@ export function decryptFile(
   encryptedData: string, 
   key: string
 ): string {
-  const decrypted = CryptoJS.AES.decrypt(encryptedData, key);
-  return decrypted.toString(CryptoJS.enc.Utf8);
+  try {
+    const keyString = CryptoJS.enc.Utf8.parse(key);
+    const decrypted = CryptoJS.AES.decrypt(encryptedData, keyString, {
+      mode: CryptoJS.mode.ECB,
+      padding: CryptoJS.pad.Pkcs7
+    });
+    return decrypted.toString(CryptoJS.enc.Base64);
+  } catch (error) {
+    console.error('Errore durante la decrittografia:', error);
+    throw new Error("Errore durante la decrittografia del file");
+  }
 }
