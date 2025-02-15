@@ -294,16 +294,17 @@ export function NoteViewer({ noteId, onClose }: Props) {
         ) : (
           <div className="space-y-6">
             <div className="whitespace-pre-wrap text-lg">
-              {note.content && user.password ? 
+              {note.content && user?.password ? 
                 (() => {
                   try {
-                    return decryptText(note.content, user.password)
+                    const decrypted = decryptText(note.content, user.password);
+                    return decrypted || "Nessun contenuto";
                   } catch (error) {
                     console.error("Errore decrittazione:", error);
-                    return "Errore nella decrittazione del contenuto";
+                    return editContent || "Errore nella decrittazione";
                   }
                 })()
-                : 'Nessun contenuto'
+                : editContent || 'Nessun contenuto'
               }
             </div>
 
