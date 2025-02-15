@@ -7,16 +7,14 @@ export function encryptText(text: string, key: string): string {
   if (!key) {
     throw new Error("Devi essere loggato per criptare le note");
   }
-  const keyString = CryptoJS.enc.Utf8.parse(key);
-  return CryptoJS.AES.encrypt(text, keyString).toString();
+  return CryptoJS.AES.encrypt(text, key).toString();
 }
 
 export function decryptText(ciphertext: string, key: string): string {
   if (!ciphertext || !key) {
     throw new Error("Testo cifrato e chiave sono richiesti per la decrittografia");
   }
-  const keyString = CryptoJS.enc.Utf8.parse(key);
-  const bytes = CryptoJS.AES.decrypt(ciphertext, keyString);
+  const bytes = CryptoJS.AES.decrypt(ciphertext, key);
   return bytes.toString(CryptoJS.enc.Utf8);
 }
 
@@ -29,77 +27,43 @@ export function encryptFile(file: File, key: string): Promise<{
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
-    reader.onload = (event) => {
+    reader.onload = () => {
       try {
-        if (!event.target?.result) {
-          console.error("FileReader non ha prodotto risultati");
-          throw new Error("Errore nella lettura del file");
-        }
+        // Prendiamo solo la parte di dati dopo la virgola nel DataURL
+        const base64 = reader.result?.toString().split(',')[1] || '';
 
-        console.log("[Debug] Tipo di file:", file.type);
-        const base64String = event.target.result.toString().split(',')[1];
-        console.log("[Debug] Lunghezza base64:", base64String.length);
-
-        // Converti la chiave in WordArray
-        const keyWordArray = CryptoJS.enc.Utf8.parse(key);
-        // Converti i dati in WordArray
-        const dataWordArray = CryptoJS.enc.Base64.parse(base64String);
-
-        // Crea un oggetto valido per la crittografia
-        const encrypted = CryptoJS.AES.encrypt(
-          dataWordArray, 
-          keyWordArray, 
-          {
-            mode: CryptoJS.mode.CBC,
-            padding: CryptoJS.pad.Pkcs7,
-            iv: CryptoJS.lib.WordArray.random(16)
-          }
-        );
-
-        console.log("[Debug] Crittografia completata, lunghezza:", encrypted.toString().length);
-
-        const type = file.type.startsWith('image/') ? 'image' : 'video';
+        // Crittografiamo direttamente la stringa base64
+        const encrypted = CryptoJS.AES.encrypt(base64, key).toString();
 
         resolve({
-          data: encrypted.toString(),
+          data: encrypted,
           fileName: file.name,
           mimeType: file.type,
-          type
+          type: file.type.startsWith('image/') ? 'image' : 'video'
         });
       } catch (error) {
-        console.error('[Debug] Errore dettagliato:', error);
+        console.error('Errore durante la crittografia:', error);
         reject(new Error("Errore durante la crittografia del file"));
       }
     };
 
     reader.onerror = () => {
-      console.error('[Debug] Errore FileReader:', reader.error);
+      console.error('Errore nella lettura del file:', reader.error);
       reject(new Error("Errore nella lettura del file"));
     };
 
+    // Legge il file come DataURL (che include il tipo MIME)
     reader.readAsDataURL(file);
   });
 }
 
-export function decryptFile(
-  encryptedData: string, 
-  key: string
-): string {
+export function decryptFile(encrypted: string, key: string): string {
   try {
-    console.log("[Debug] Inizio decrittografia, lunghezza dati:", encryptedData.length);
-
-    // Converti la chiave in WordArray
-    const keyWordArray = CryptoJS.enc.Utf8.parse(key);
-
-    const decrypted = CryptoJS.AES.decrypt(encryptedData, keyWordArray, {
-      mode: CryptoJS.mode.CBC,
-      padding: CryptoJS.pad.Pkcs7
-    });
-
-    console.log("[Debug] Decrittografia completata");
-    return decrypted.toString(CryptoJS.enc.Base64);
+    // Decrittiamo per ottenere il base64 originale
+    const bytes = CryptoJS.AES.decrypt(encrypted, key);
+    return bytes.toString(CryptoJS.enc.Utf8);
   } catch (error) {
-    console.error('[Debug] Errore decrittografia:', error);
+    console.error('Errore durante la decrittografia:', error);
     throw new Error("Errore durante la decrittografia del file");
   }
 }
