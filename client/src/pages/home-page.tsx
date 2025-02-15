@@ -11,20 +11,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { type Note, type Attachment } from "@shared/schema";
+import { type Note } from "@shared/schema";
 import { useForm } from "react-hook-form";
-import { encryptText, decryptText, encryptFile } from "@/lib/crypto";
+import { encryptText } from "@/lib/crypto";
 import { Label } from "@/components/ui/label";
 import { LogOut, Plus, Loader2, Lock, Shield, Binary, Image, Video, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { NoteViewer } from "@/components/NoteViewer";
 
 type FormData = {
   title: string;
   content: string;
-  attachments?: File[];
+  files: File[];
 };
 
 export default function HomePage() {
@@ -32,7 +32,6 @@ export default function HomePage() {
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
   const [showNoteViewer, setShowNoteViewer] = useState(false);
   const [previewFiles, setPreviewFiles] = useState<{ file: File; preview: string }[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const [showCreateNote, setShowCreateNote] = useState(false);
 
@@ -40,7 +39,7 @@ export default function HomePage() {
     defaultValues: {
       title: '',
       content: '',
-      attachments: []
+      files: []
     }
   });
 
@@ -50,7 +49,24 @@ export default function HomePage() {
 
   const createNoteMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      const res = await apiRequest("POST", "/api/notes", data);
+      const formData = new FormData();
+
+      if (!user?.password) throw new Error("Password non trovata");
+
+      // Encrypt content before sending
+      const encryptedContent = encryptText(data.content, user.password);
+
+      formData.append('title', data.title);
+      formData.append('content', encryptedContent);
+
+      // Add files to formData
+      if (data.files?.length > 0) {
+        data.files.forEach((file) => {
+          formData.append('files', file);
+        });
+      }
+
+      const res = await apiRequest("POST", "/api/notes", formData);
       if (!res.ok) {
         const errorText = await res.text();
         throw new Error(errorText);
@@ -78,20 +94,13 @@ export default function HomePage() {
 
   const onSubmit = async (formData: FormData) => {
     try {
-      if (!formData.get('title') || !formData.get('content')) {
+      if (!formData.title || !formData.content) {
         toast({
           title: "Errore",
           description: "Titolo e contenuto sono obbligatori",
           variant: "destructive"
         });
         return;
-      }
-
-      const files = Array.from(formData.getAll('attachments') as File[]);
-      if (files.length > 0) {
-        files.forEach(file => {
-          formData.append('files', file);
-        });
       }
 
       await createNoteMutation.mutateAsync(formData);
@@ -107,7 +116,7 @@ export default function HomePage() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+    const maxSize = 10 * 1024 * 1024; // 10MB
 
     const validFiles = files.filter(file => {
       if (file.size > maxSize) {
@@ -121,23 +130,14 @@ export default function HomePage() {
       return file.type.startsWith('image/') || file.type.startsWith('video/');
     });
 
-    if (validFiles.length !== files.length) {
-      const invalidCount = files.length - validFiles.length;
-      toast({
-        title: "File non validi",
-        description: `${invalidCount} file sono stati ignorati perché non supportati o troppo grandi`,
-        variant: "destructive"
-      });
-    }
-
     const newPreviews = validFiles.map(file => ({
       file,
       preview: URL.createObjectURL(file)
     }));
 
     setPreviewFiles(prev => [...prev, ...newPreviews]);
-    const currentFiles = form.getValues('attachments') || [];
-    form.setValue('attachments', [...currentFiles, ...validFiles]);
+    const currentFiles = form.getValues('files') || [];
+    form.setValue('files', [...currentFiles, ...validFiles]);
   };
 
   const removeFile = (index: number) => {
@@ -146,9 +146,9 @@ export default function HomePage() {
       return prev.filter((_, i) => i !== index);
     });
 
-    const currentFiles = form.getValues('attachments') || [];
+    const currentFiles = form.getValues('files') || [];
     form.setValue(
-      'attachments',
+      'files',
       currentFiles.filter((_, i) => i !== index)
     );
   };
@@ -187,6 +187,7 @@ export default function HomePage() {
           </div>
         </div>
       </header>
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-2xl font-bold font-mono">LE TUE NOTE</h2>
@@ -306,17 +307,7 @@ export default function HomePage() {
                     {user && (
                       <>
                         <p className="whitespace-pre-wrap font-mono text-zinc-300 mb-4 line-clamp-3">
-                          {note.content && user.password ?
-                            (() => {
-                              try {
-                                return decryptText(note.content, user.password)
-                              } catch (error) {
-                                console.error("Errore decrittazione:", error);
-                                return "Errore nella decrittazione del contenuto";
-                              }
-                            })()
-                            : 'Nessun contenuto'
-                          }
+                          {note.content || 'Nessun contenuto'}
                         </p>
                         {note.attachments && note.attachments.length > 0 && (
                           <div className="flex gap-2 text-sm text-zinc-400">
