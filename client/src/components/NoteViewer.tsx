@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
-import { Trash2, Edit2, Save, X, Plus, X as XIcon } from "lucide-react";
+import { Trash2, Edit2, Save, X, Plus, X as XIcon, Loader2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,10 +39,13 @@ export function NoteViewer({ noteId, onClose }: Props) {
   });
 
   useEffect(() => {
-    if (note && user) {
+    if (note?.content && user?.password) {
       try {
+        console.log("Tentativo di decrittazione con:", {
+          hasContent: !!note.content,
+          hasPassword: !!user.password
+        });
         const decryptedContent = decryptText(note.content, user.password);
-        console.log("Contenuto decriptato:", decryptedContent); // Debug
         setContent(decryptedContent);
         setEditContent(decryptedContent);
       } catch (error) {
@@ -58,7 +61,9 @@ export function NoteViewer({ noteId, onClose }: Props) {
 
   const updateMutation = useMutation({
     mutationFn: async ({ content, attachments }: { content: string; attachments?: File[] }) => {
-      if (!user || !note) throw new Error("Utente non autenticato");
+      if (!user?.password || !note) {
+        throw new Error("Dati di autenticazione mancanti");
+      }
 
       const encryptedContent = encryptText(content, user.password);
       let finalAttachments = note.attachments || [];
@@ -98,7 +103,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
     onError: (error) => {
       toast({
         title: "Errore",
-        description: error.message,
+        description: error instanceof Error ? error.message : "Errore sconosciuto",
         variant: "destructive",
       });
     },
@@ -120,7 +125,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
     onError: (error) => {
       toast({
         title: "Errore",
-        description: error.message,
+        description: error instanceof Error ? error.message : "Errore sconosciuto",
         variant: "destructive",
       });
     },
@@ -164,13 +169,12 @@ export function NoteViewer({ noteId, onClose }: Props) {
   if (isLoading || !note || !user) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
-  const decryptedContent = decryptText(note.content, user.password);
-  console.log("Rendering content:", decryptedContent); // Debug
+  const decryptedContent = note.content && user.password ? decryptText(note.content, user.password) : '';
 
   return (
     <div className="flex flex-col h-full">
@@ -180,7 +184,11 @@ export function NoteViewer({ noteId, onClose }: Props) {
           {isEditing ? (
             <>
               <Button onClick={handleSave} disabled={updateMutation.isPending}>
-                <Save className="h-4 w-4 mr-2" />
+                {updateMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Save className="h-4 w-4 mr-2" />
+                )}
                 Salva
               </Button>
               <Button variant="outline" onClick={() => {
@@ -194,7 +202,10 @@ export function NoteViewer({ noteId, onClose }: Props) {
             </>
           ) : (
             <>
-              <Button variant="outline" onClick={() => setIsEditing(true)}>
+              <Button variant="outline" onClick={() => {
+                setIsEditing(true);
+                setEditContent(decryptedContent);
+              }}>
                 <Edit2 className="h-4 w-4 mr-2" />
                 Modifica
               </Button>
@@ -277,6 +288,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
             {note.attachments && note.attachments.length > 0 && (
               <div className="grid grid-cols-2 gap-6">
                 {note.attachments.map((attachment, index) => {
+                  if (!user.password) return null;
                   try {
                     const decryptedData = decryptFile(attachment.data, user.password);
                     return (
