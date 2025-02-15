@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Note } from "@shared/schema";
 import { decryptText, decryptFile, encryptText, encryptFile } from "@/lib/crypto";
@@ -29,63 +29,35 @@ export function NoteViewer({ noteId, onClose }: Props) {
   const { user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [content, setContent] = useState("");
   const [editContent, setEditContent] = useState("");
-  const [newAttachments, setNewAttachments] = useState<File[]>([]);
-  const [fileInputRef, setFileInputRef] = useState<HTMLInputElement | null>(null);
+  const [attachments, setAttachments] = useState<File[]>([]);
 
   const { data: note, isLoading } = useQuery<Note>({
     queryKey: ["/api/notes", noteId],
   });
 
-  useEffect(() => {
-    if (note?.content && user?.password) {
-      try {
-        console.log("Tentativo di decrittazione con:", {
-          hasContent: !!note.content,
-          hasPassword: !!user.password
-        });
-        const decryptedContent = decryptText(note.content, user.password);
-        setContent(decryptedContent);
-        setEditContent(decryptedContent);
-      } catch (error) {
-        console.error("Errore decrittazione:", error);
-        toast({
-          title: "Errore",
-          description: "Impossibile decrittare la nota",
-          variant: "destructive",
-        });
-      }
-    }
-  }, [note, user]);
-
   const updateMutation = useMutation({
-    mutationFn: async ({ content, attachments }: { content: string; attachments?: File[] }) => {
-      if (!user?.password || !note) {
-        throw new Error("Dati di autenticazione mancanti");
-      }
+    mutationFn: async ({ content, files }: { content: string; files?: File[] }) => {
+      if (!user?.password) throw new Error("Utente non autenticato");
 
-      const encryptedContent = encryptText(content, user.password);
-      let finalAttachments = note.attachments || [];
-
-      if (attachments?.length) {
-        const newEncryptedAttachments = await Promise.all(
-          attachments.map(async (file) => {
+      let newAttachments = [];
+      if (files?.length) {
+        newAttachments = await Promise.all(
+          files.map(async (file) => {
             const encrypted = await encryptFile(file, user.password);
             return {
-              type: file.type.startsWith('image/') ? ('image' as const) : ('video' as const),
+              type: file.type.startsWith('image/') ? 'image' : 'video',
               data: encrypted.data,
               fileName: file.name,
               mimeType: file.type
             };
           })
         );
-        finalAttachments = [...finalAttachments, ...newEncryptedAttachments];
       }
 
       const res = await apiRequest("PATCH", `/api/notes/${noteId}`, {
-        content: encryptedContent,
-        attachments: finalAttachments
+        content: encryptText(content, user.password),
+        attachments: [...(note?.attachments || []), ...newAttachments]
       });
 
       if (!res.ok) throw new Error("Errore durante l'aggiornamento");
@@ -94,11 +66,8 @@ export function NoteViewer({ noteId, onClose }: Props) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notes", noteId] });
       setIsEditing(false);
-      setNewAttachments([]);
-      toast({
-        title: "Successo",
-        description: "Nota aggiornata",
-      });
+      setAttachments([]);
+      toast({ title: "Successo", description: "Nota aggiornata" });
     },
     onError: (error) => {
       toast({
@@ -117,10 +86,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notes"] });
       onClose();
-      toast({
-        title: "Successo",
-        description: "Nota eliminata",
-      });
+      toast({ title: "Successo", description: "Nota eliminata" });
     },
     onError: (error) => {
       toast({
@@ -140,7 +106,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
       });
       return;
     }
-    updateMutation.mutate({ content: editContent, attachments: newAttachments });
+    updateMutation.mutate({ content: editContent, files: attachments });
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -159,14 +125,27 @@ export function NoteViewer({ noteId, onClose }: Props) {
       return file.type.startsWith('image/') || file.type.startsWith('video/');
     });
 
-    setNewAttachments(prev => [...prev, ...validFiles]);
+    setAttachments(prev => [...prev, ...validFiles]);
   };
 
-  const removeAttachment = (index: number) => {
-    setNewAttachments(prev => prev.filter((_, i) => i !== index));
-  };
+  useEffect(() => {
+    if (note && user?.password) {
+      try {
+        const decryptedContent = decryptText(note.content, user.password);
+        setEditContent(decryptedContent);
+      } catch (error) {
+        console.error("Errore decrittazione:", error);
+        toast({
+          title: "Errore",
+          description: "Impossibile decrittare la nota",
+          variant: "destructive",
+        });
+      }
+    }
+  }, [note, user]);
 
-  if (isLoading || !note || !user) {
+
+  if (isLoading || !note || !user?.password) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -174,7 +153,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
     );
   }
 
-  const decryptedContent = note.content && user.password ? decryptText(note.content, user.password) : '';
+  const decryptedContent = decryptText(note.content, user.password);
 
   return (
     <div className="flex flex-col h-full">
@@ -193,8 +172,8 @@ export function NoteViewer({ noteId, onClose }: Props) {
               </Button>
               <Button variant="outline" onClick={() => {
                 setIsEditing(false);
-                setEditContent(content);
-                setNewAttachments([]);
+                setEditContent(decryptedContent);
+                setAttachments([]);
               }}>
                 <X className="h-4 w-4 mr-2" />
                 Annulla
@@ -227,49 +206,46 @@ export function NoteViewer({ noteId, onClose }: Props) {
             <Textarea
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
-              className="w-full min-h-[300px] text-lg bg-black/20"
-              placeholder="Scrivi qui il contenuto della nota..."
+              className="w-full min-h-[300px] text-lg"
+              placeholder="Contenuto della nota..."
             />
 
-            <div 
-              className="border-2 border-dashed border-zinc-800 rounded-lg p-6 cursor-pointer hover:border-zinc-700 transition-colors"
-              onClick={() => fileInputRef?.click()}
-            >
+            <div>
               <input
                 type="file"
-                ref={el => setFileInputRef(el)}
                 className="hidden"
+                id="file-upload"
                 multiple
                 accept="image/*,video/*"
                 onChange={handleFileChange}
               />
-              <div className="flex flex-col items-center gap-2">
-                <Plus className="h-8 w-8" />
-                <p className="text-sm text-zinc-400">
-                  Aggiungi immagini o video (max 10MB)
-                </p>
-              </div>
+              <label htmlFor="file-upload" className="cursor-pointer">
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400">
+                  <Plus className="mx-auto h-12 w-12 text-gray-400" />
+                  <p className="mt-2 text-sm text-gray-600">Aggiungi media</p>
+                </div>
+              </label>
             </div>
 
-            {newAttachments.length > 0 && (
-              <div className="grid grid-cols-2 gap-6">
-                {newAttachments.map((file, index) => (
-                  <div key={index} className="relative group">
+            {attachments.length > 0 && (
+              <div className="grid grid-cols-2 gap-4">
+                {attachments.map((file, index) => (
+                  <div key={index} className="relative">
                     {file.type.startsWith('image/') ? (
                       <img
                         src={URL.createObjectURL(file)}
                         alt={file.name}
-                        className="w-full rounded-lg border border-zinc-800"
+                        className="w-full h-40 object-cover rounded-lg"
                       />
                     ) : (
                       <video
                         src={URL.createObjectURL(file)}
-                        className="w-full rounded-lg border border-zinc-800"
+                        className="w-full h-40 object-cover rounded-lg"
                         controls
                       />
                     )}
                     <button
-                      onClick={() => removeAttachment(index)}
+                      onClick={() => setAttachments(prev => prev.filter((_, i) => i !== index))}
                       className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1"
                     >
                       <XIcon className="h-4 w-4" />
@@ -280,15 +256,14 @@ export function NoteViewer({ noteId, onClose }: Props) {
             )}
           </div>
         ) : (
-          <div className="space-y-8">
-            <div className="whitespace-pre-wrap text-lg bg-black/20 rounded-lg p-6">
+          <div className="space-y-6">
+            <div className="whitespace-pre-wrap text-lg">
               {decryptedContent}
             </div>
 
             {note.attachments && note.attachments.length > 0 && (
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-2 gap-4">
                 {note.attachments.map((attachment, index) => {
-                  if (!user.password) return null;
                   try {
                     const decryptedData = decryptFile(attachment.data, user.password);
                     return (
@@ -297,24 +272,20 @@ export function NoteViewer({ noteId, onClose }: Props) {
                           <img
                             src={`data:${attachment.mimeType};base64,${decryptedData}`}
                             alt={attachment.fileName}
-                            className="w-full rounded-lg border border-zinc-800"
+                            className="w-full rounded-lg"
                           />
                         ) : (
                           <video
                             src={`data:${attachment.mimeType};base64,${decryptedData}`}
                             controls
-                            className="w-full rounded-lg border border-zinc-800"
+                            className="w-full rounded-lg"
                           />
                         )}
                       </div>
                     );
                   } catch (error) {
                     console.error("Errore decriptazione allegato:", error);
-                    return (
-                      <div key={index} className="p-4 border border-red-500 rounded-lg text-red-500">
-                        Errore nel caricamento del file
-                      </div>
-                    );
+                    return null;
                   }
                 })}
               </div>
@@ -328,13 +299,11 @@ export function NoteViewer({ noteId, onClose }: Props) {
           <AlertDialogHeader>
             <AlertDialogTitle>Conferma eliminazione</AlertDialogTitle>
             <AlertDialogDescription>
-              Sei sicuro di voler eliminare questa nota? L'azione non può essere annullata.
+              Sei sicuro di voler eliminare questa nota?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setShowDeleteDialog(false)}>
-              Annulla
-            </AlertDialogCancel>
+            <AlertDialogCancel>Annulla</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteMutation.mutate()}
               className="bg-red-500 hover:bg-red-600"
