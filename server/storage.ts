@@ -71,71 +71,47 @@ export class DatabaseStorage implements IStorage {
 
   async getNote(noteId: number, userId: number): Promise<Note | undefined> {
     console.log("[Storage] Recupero nota ID:", noteId, "per utente ID:", userId);
-    const [note] = await db.select()
+    const [note] = await db
+      .select()
       .from(notes)
       .where(and(eq(notes.id, noteId), eq(notes.userId, userId)));
+    console.log("[Storage] Nota trovata:", note ? "Sì" : "No");
     return note;
   }
 
-  async updateNote(noteId: number, userId: number, updateData: Partial<InsertNote>): Promise<Note | undefined> {
-    console.log("[Storage] Aggiornamento nota ID:", noteId, "per utente ID:", userId);
-    const [updated] = await db.update(notes)
-      .set(updateData)
-      .where(and(eq(notes.id, noteId), eq(notes.userId, userId)))
-      .returning();
-    return updated;
-  }
-
-  async deleteNote(noteId: number, userId: number): Promise<boolean> {
-    console.log("[Storage] Eliminazione nota ID:", noteId, "per utente ID:", userId);
-    try {
-      const result = await db.delete(notes)
-        .where(and(eq(notes.id, noteId), eq(notes.userId, userId)));
-
-      const deleted = result.rowCount === 1;
-      console.log("[Storage] Nota eliminata:", deleted);
-      return deleted;
-    } catch (error) {
-      console.error("[Storage] Errore durante l'eliminazione della nota:", error);
-      return false;
-    }
-  }
-
   async createNote(userId: number, insertNote: InsertNote): Promise<Note> {
-    try {
-      console.log("[Storage] Inizio creazione nota:", {
-        userId,
-        title: insertNote.title,
-        contentLength: insertNote.content?.length,
-        attachmentsCount: insertNote.attachments?.length
-      });
+    console.log("[Storage] Inizio creazione nota:", {
+      userId,
+      title: insertNote.title,
+      contentLength: insertNote.content?.length || 0,
+      hasAttachments: insertNote.attachments && insertNote.attachments.length > 0
+    });
 
+    try {
       // Validazione base
       if (!userId) {
+        console.error("[Storage] ID utente non valido");
         throw new Error("ID utente non valido");
       }
 
-      if (!insertNote.title || !insertNote.content) {
+      if (!insertNote.title?.trim() || !insertNote.content?.trim()) {
+        console.error("[Storage] Titolo o contenuto mancanti");
         throw new Error("Titolo e contenuto sono obbligatori");
       }
 
-      // Calcolo dimensione totale allegati
-      if (insertNote.attachments && insertNote.attachments.length > 0) {
-        console.log("[Storage] Validazione allegati...");
-        const totalSize = insertNote.attachments.reduce((sum, att) => sum + att.size, 0);
-        console.log("[Storage] Dimensione totale allegati:", totalSize / 1024 / 1024, "MB");
-
-        if (totalSize > 25 * 1024 * 1024) { // 25MB totali
-          throw new Error("La dimensione totale degli allegati supera i 25MB");
-        }
-      }
-
-      console.log("[Storage] Inserimento nota nel database...");
-      const [note] = await db.insert(notes).values({
+      // Log dei dati prima dell'inserimento
+      console.log("[Storage] Dati da inserire:", {
         userId,
         title: insertNote.title,
-        content: insertNote.content,
-        attachments: insertNote.attachments || [],
+        contentPresent: !!insertNote.content,
+        attachmentsCount: insertNote.attachments?.length || 0
+      });
+
+      const [note] = await db.insert(notes).values({
+        userId,
+        title: insertNote.title.trim(),
+        content: insertNote.content.trim(),
+        attachments: insertNote.attachments || []
       }).returning();
 
       console.log("[Storage] Nota creata con successo:", {
@@ -146,8 +122,32 @@ export class DatabaseStorage implements IStorage {
 
       return note;
     } catch (error) {
-      console.error("[Storage] Errore critico durante la creazione della nota:", error);
+      console.error("[Storage] Errore durante la creazione della nota:", error);
       throw error;
+    }
+  }
+
+  async updateNote(noteId: number, userId: number, updateData: Partial<InsertNote>): Promise<Note | undefined> {
+    console.log("[Storage] Aggiornamento nota ID:", noteId, "per utente ID:", userId);
+    const [updated] = await db.update(notes)
+      .set(updateData)
+      .where(and(eq(notes.id, noteId), eq(notes.userId, userId)))
+      .returning();
+    console.log("[Storage] Nota aggiornata:", updated ? "Sì" : "No");
+    return updated;
+  }
+
+  async deleteNote(noteId: number, userId: number): Promise<boolean> {
+    console.log("[Storage] Eliminazione nota ID:", noteId, "per utente ID:", userId);
+    try {
+      const result = await db.delete(notes)
+        .where(and(eq(notes.id, noteId), eq(notes.userId, userId)));
+      const deleted = result.rowCount === 1;
+      console.log("[Storage] Nota eliminata:", deleted);
+      return deleted;
+    } catch (error) {
+      console.error("[Storage] Errore durante l'eliminazione della nota:", error);
+      return false;
     }
   }
 }

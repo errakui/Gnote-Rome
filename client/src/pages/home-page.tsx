@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { type Note, insertNoteSchema } from "@shared/schema";
+import { type Note } from "@shared/schema";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { encryptText } from "@/lib/crypto";
@@ -21,9 +21,9 @@ import { useToast } from "@/hooks/use-toast";
 import { NoteViewer } from "@/components/NoteViewer";
 import { z } from "zod";
 
-const formSchema = insertNoteSchema.extend({
-  content: z.string().min(1, "Il contenuto è obbligatorio"),
-  title: z.string().min(1, "Il titolo è obbligatorio"),
+const formSchema = z.object({
+  title: z.string().min(1, "Il titolo è obbligatorio").trim(),
+  content: z.string().min(1, "Il contenuto è obbligatorio").trim(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -54,11 +54,18 @@ export default function HomePage() {
 
       const formData = new FormData();
 
-      // Aggiungi i campi obbligatori
-      formData.append('title', data.title);
-      formData.append('content', encryptText(data.content, user.password));
+      // Ensure title and content are not empty after trimming
+      const trimmedTitle = data.title.trim();
+      const trimmedContent = data.content.trim();
 
-      // Aggiungi i file se presenti
+      if (!trimmedTitle || !trimmedContent) {
+        throw new Error("Titolo e contenuto sono obbligatori");
+      }
+
+      formData.append('title', trimmedTitle);
+      formData.append('content', encryptText(trimmedContent, user.password));
+
+      // Add files if present
       if (previewFiles.length > 0) {
         previewFiles.forEach(({ file }) => {
           formData.append('files', file);
@@ -67,8 +74,8 @@ export default function HomePage() {
 
       const res = await apiRequest("POST", "/api/notes", formData);
       if (!res.ok) {
-        const error = await res.text();
-        throw new Error(error);
+        const error = await res.json();
+        throw new Error(error.error || "Errore sconosciuto");
       }
       return res.json();
     },
@@ -123,6 +130,18 @@ export default function HomePage() {
   };
 
   const onSubmit = form.handleSubmit((data) => {
+    const trimmedTitle = data.title.trim();
+    const trimmedContent = data.content.trim();
+
+    if (!trimmedTitle || !trimmedContent) {
+      toast({
+        title: "Errore",
+        description: "Titolo e contenuto sono obbligatori",
+        variant: "destructive",
+      });
+      return;
+    }
+
     createNoteMutation.mutate(data);
   });
 
