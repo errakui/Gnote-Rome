@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Note } from "@shared/schema";
 import { decryptText, decryptFile, encryptText } from "@/lib/crypto";
@@ -33,37 +33,44 @@ export function NoteViewer({ noteId, onClose }: Props) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
 
-  const { data: note, isLoading } = useQuery<Note>({
+  const { data: note } = useQuery<Note>({
     queryKey: ["/api/notes", noteId],
-    queryFn: () => apiRequest("GET", `/api/notes/${noteId}`).then(r => r.json()),
-    onSuccess: (note) => {
-      if (!isEditing && user) {
-        try {
-          setTitle(note.title);
-          const decrypted = decryptText(note.content, user.password);
-          setContent(decrypted);
-        } catch (error) {
-          console.error("Failed to decrypt note:", error);
-          toast({
-            title: "Errore",
-            description: "Impossibile decrittare la nota",
-            variant: "destructive",
-          });
-        }
-      }
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/notes/${noteId}`);
+      if (!res.ok) throw new Error("Errore nel recupero della nota");
+      return res.json();
     },
   });
 
-  const updateMutation = useMutation({
-    mutationFn: async (data: Partial<Note>) => {
-      const response = await apiRequest("PATCH", `/api/notes/${noteId}`, data);
-      if (!response.ok) {
-        throw new Error("Errore durante l'aggiornamento della nota");
+  // Carica il contenuto decifrato quando la nota viene caricata
+  useEffect(() => {
+    if (note && user && !isEditing) {
+      try {
+        setTitle(note.title);
+        setContent(decryptText(note.content, user.password));
+      } catch (error) {
+        console.error("Errore decrittazione:", error);
+        toast({
+          title: "Errore",
+          description: "Impossibile decrittare la nota",
+          variant: "destructive",
+        });
       }
-      return response.json();
+    }
+  }, [note, user, isEditing]);
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: { title: string; content: string }) => {
+      if (!user) throw new Error("Utente non autenticato");
+      const encryptedContent = encryptText(data.content, user.password);
+      const res = await apiRequest("PATCH", `/api/notes/${noteId}`, {
+        title: data.title,
+        content: encryptedContent,
+      });
+      if (!res.ok) throw new Error("Errore durante l'aggiornamento");
+      return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notes", noteId] });
       queryClient.invalidateQueries({ queryKey: ["/api/notes"] });
       setIsEditing(false);
       toast({
@@ -71,7 +78,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
         description: "Nota aggiornata",
       });
     },
-    onError: (error: Error) => {
+    onError: (error) => {
       toast({
         title: "Errore",
         description: error.message,
@@ -82,10 +89,8 @@ export function NoteViewer({ noteId, onClose }: Props) {
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("DELETE", `/api/notes/${noteId}`);
-      if (!response.ok) {
-        throw new Error("Errore durante l'eliminazione della nota");
-      }
+      const res = await apiRequest("DELETE", `/api/notes/${noteId}`);
+      if (!res.ok) throw new Error("Errore durante l'eliminazione");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notes"] });
@@ -95,7 +100,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
         description: "Nota eliminata",
       });
     },
-    onError: (error: Error) => {
+    onError: (error) => {
       toast({
         title: "Errore",
         description: error.message,
@@ -104,46 +109,28 @@ export function NoteViewer({ noteId, onClose }: Props) {
     },
   });
 
-  const handleSave = async () => {
-    if (!note || !user) return;
-
-    try {
-      const encrypted = encryptText(content, user.password);
-      await updateMutation.mutateAsync({
-        title,
-        content: encrypted,
-      });
-    } catch (error) {
-      console.error("Failed to save note:", error);
+  const handleSave = () => {
+    if (!title.trim() || !content.trim()) {
       toast({
         title: "Errore",
-        description: "Errore durante il salvataggio",
+        description: "Titolo e contenuto sono obbligatori",
         variant: "destructive",
       });
+      return;
     }
+    updateMutation.mutate({ title, content });
   };
 
-  const handleDelete = () => {
-    setShowDeleteDialog(true);
-  };
-
-  if (isLoading) {
-    return <div className="p-4 text-center">Caricamento...</div>;
-  }
-
-  if (!note) {
-    return <div className="p-4 text-center">Nota non trovata</div>;
-  }
+  if (!note || !user) return null;
 
   return (
-    <div className="space-y-6 p-4">
-      <div className="flex justify-between items-center">
+    <div className="space-y-4">
+      <div className="flex justify-between items-center mb-4">
         {isEditing ? (
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Titolo"
-            className="text-xl font-bold flex-1 mr-4"
+            className="text-xl font-bold"
           />
         ) : (
           <h2 className="text-xl font-bold">{note.title}</h2>
@@ -159,7 +146,6 @@ export function NoteViewer({ noteId, onClose }: Props) {
               <Button
                 variant="outline"
                 onClick={() => setIsEditing(false)}
-                disabled={updateMutation.isPending}
               >
                 <X className="h-4 w-4 mr-2" />
                 Annulla
@@ -171,7 +157,10 @@ export function NoteViewer({ noteId, onClose }: Props) {
                 <Edit2 className="h-4 w-4 mr-2" />
                 Modifica
               </Button>
-              <Button variant="destructive" onClick={handleDelete}>
+              <Button 
+                variant="destructive"
+                onClick={() => setShowDeleteDialog(true)}
+              >
                 <Trash2 className="h-4 w-4 mr-2" />
                 Elimina
               </Button>
@@ -184,59 +173,54 @@ export function NoteViewer({ noteId, onClose }: Props) {
         <Textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          placeholder="Contenuto"
           rows={10}
-          className="w-full"
+          className="w-full min-h-[200px]"
         />
       ) : (
-        <div className="whitespace-pre-wrap bg-black/20 rounded-lg p-4">
+        <div className="whitespace-pre-wrap bg-zinc-800 rounded-lg p-4">
           {content}
         </div>
       )}
 
       {note.attachments && note.attachments.length > 0 && (
-        <div className="space-y-4">
+        <div className="space-y-4 mt-6">
           <h3 className="text-lg font-semibold">Allegati</h3>
           <div className="grid grid-cols-2 gap-4">
             {note.attachments.map((attachment, index) => {
               try {
-                if (!user) throw new Error("Utente non autenticato");
-
-                const decryptedData = decryptFile(
-                  attachment.data,
-                  user.password
-                );
+                const decryptedData = decryptFile(attachment.data, user.password);
 
                 return (
                   <div key={index} className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2 text-sm text-zinc-400">
                       {attachment.type === 'image' ? (
                         <Image className="h-4 w-4" />
                       ) : (
                         <Film className="h-4 w-4" />
                       )}
-                      {attachment.fileName}
+                      <span>{attachment.fileName}</span>
                     </div>
+
                     {attachment.type === 'image' ? (
                       <img
                         src={`data:${attachment.mimeType};base64,${decryptedData}`}
                         alt={attachment.fileName}
-                        className="w-full h-48 object-cover rounded-lg"
+                        className="w-full h-48 object-cover rounded-lg border border-zinc-700"
                       />
                     ) : (
                       <video
                         src={`data:${attachment.mimeType};base64,${decryptedData}`}
                         controls
-                        className="w-full h-48 object-cover rounded-lg"
+                        className="w-full h-48 object-cover rounded-lg border border-zinc-700"
                       />
                     )}
                   </div>
                 );
               } catch (error) {
-                console.error("Failed to decrypt attachment:", error);
+                console.error("Errore decrittazione allegato:", error);
                 return (
-                  <div key={index} className="text-red-500 p-4 border border-red-500 rounded-lg">
-                    Errore nel caricamento del media
+                  <div key={index} className="p-4 border border-red-500 rounded-lg text-red-500">
+                    Errore nel caricamento del file
                   </div>
                 );
               }
@@ -248,13 +232,15 @@ export function NoteViewer({ noteId, onClose }: Props) {
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Sei sicuro?</AlertDialogTitle>
+            <AlertDialogTitle>Conferma eliminazione</AlertDialogTitle>
             <AlertDialogDescription>
-              Questa azione non può essere annullata. La nota verrà eliminata permanentemente.
+              Sei sicuro di voler eliminare questa nota? L'azione non può essere annullata.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annulla</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setShowDeleteDialog(false)}>
+              Annulla
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteMutation.mutate()}
               className="bg-red-500 hover:bg-red-600"

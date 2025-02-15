@@ -338,14 +338,14 @@ export default function HomePage() {
               }}
             >
               <DialogTrigger asChild>
-                <Card 
+                <Card
                   className="bg-zinc-900 border-zinc-800 cursor-pointer hover:bg-zinc-800 transition-colors"
                   onClick={() => {
                     setSelectedNoteId(note.id);
                     setShowNoteViewer(true);
                   }}
                 >
-                  <CardHeader>
+                  <CardHeader className="pb-2">
                     <CardTitle className="font-mono flex items-center space-x-2">
                       <Lock className="h-4 w-4" />
                       <span>{note.title}</span>
@@ -363,13 +363,17 @@ export default function HomePage() {
                             {note.attachments.some(a => a.type === 'image') && (
                               <div className="flex items-center gap-1">
                                 <Image className="h-4 w-4" />
-                                <span>{note.attachments.filter(a => a.type === 'image').length}</span>
+                                <span>
+                                  {note.attachments.filter(a => a.type === 'image').length}
+                                </span>
                               </div>
                             )}
                             {note.attachments.some(a => a.type === 'video') && (
                               <div className="flex items-center gap-1">
                                 <Video className="h-4 w-4" />
-                                <span>{note.attachments.filter(a => a.type === 'video').length}</span>
+                                <span>
+                                  {note.attachments.filter(a => a.type === 'video').length}
+                                </span>
                               </div>
                             )}
                           </div>
@@ -379,14 +383,14 @@ export default function HomePage() {
                   </CardContent>
                 </Card>
               </DialogTrigger>
-              <DialogContent className="bg-zinc-900 border-zinc-800 max-w-4xl">
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-6">
                 {selectedNoteId === note.id && (
-                  <NoteViewer 
-                    noteId={note.id} 
+                  <NoteViewer
+                    noteId={note.id}
                     onClose={() => {
                       setShowNoteViewer(false);
                       setSelectedNoteId(null);
-                    }} 
+                    }}
                   />
                 )}
               </DialogContent>
