@@ -2,8 +2,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -11,8 +9,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { type Note } from "@shared/schema";
+import { type Note, insertNoteSchema } from "@shared/schema";
 import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { encryptText } from "@/lib/crypto";
 import { Label } from "@/components/ui/label";
 import { LogOut, Plus, Loader2, Lock, Shield, Image, Video, X } from "lucide-react";
@@ -20,11 +19,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { NoteViewer } from "@/components/NoteViewer";
+import { z } from "zod";
 
-type FormData = {
-  title: string;
-  content: string;
-};
+const formSchema = insertNoteSchema.extend({
+  content: z.string().min(1, "Il contenuto è obbligatorio"),
+  title: z.string().min(1, "Il titolo è obbligatorio"),
+});
+
+type FormData = z.infer<typeof formSchema>;
 
 export default function HomePage() {
   const { user, logoutMutation } = useAuth();
@@ -35,6 +37,7 @@ export default function HomePage() {
   const [showCreateNote, setShowCreateNote] = useState(false);
 
   const form = useForm<FormData>({
+    resolver: zodResolver(formSchema),
     defaultValues: {
       title: '',
       content: ''
@@ -46,20 +49,23 @@ export default function HomePage() {
   });
 
   const createNoteMutation = useMutation({
-    mutationFn: async (formData: FormData & { files?: File[] }) => {
+    mutationFn: async (data: FormData) => {
       if (!user?.password) throw new Error("Errore di autenticazione");
 
-      const submitData = new FormData();
-      submitData.append('title', formData.title);
-      submitData.append('content', encryptText(formData.content, user.password));
+      const formData = new FormData();
 
-      if (formData.files) {
-        formData.files.forEach(file => {
-          submitData.append('files', file);
+      // Aggiungi i campi obbligatori
+      formData.append('title', data.title);
+      formData.append('content', encryptText(data.content, user.password));
+
+      // Aggiungi i file se presenti
+      if (previewFiles.length > 0) {
+        previewFiles.forEach(({ file }) => {
+          formData.append('files', file);
         });
       }
 
-      const res = await apiRequest("POST", "/api/notes", submitData);
+      const res = await apiRequest("POST", "/api/notes", formData);
       if (!res.ok) {
         const error = await res.text();
         throw new Error(error);
@@ -117,10 +123,7 @@ export default function HomePage() {
   };
 
   const onSubmit = form.handleSubmit((data) => {
-    createNoteMutation.mutate({
-      ...data,
-      files: previewFiles.map(pf => pf.file)
-    });
+    createNoteMutation.mutate(data);
   });
 
   if (isLoading) {
@@ -182,17 +185,23 @@ export default function HomePage() {
                     <Label htmlFor="title">Titolo</Label>
                     <Input
                       id="title"
-                      {...form.register("title", { required: true })}
+                      {...form.register("title")}
                       className="bg-zinc-800 border-zinc-700"
                     />
+                    {form.formState.errors.title && (
+                      <p className="text-red-500 text-sm">{form.formState.errors.title.message}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="content">Contenuto</Label>
                     <Textarea
                       id="content"
-                      {...form.register("content", { required: true })}
+                      {...form.register("content")}
                       className="min-h-[200px] bg-zinc-800 border-zinc-700"
                     />
+                    {form.formState.errors.content && (
+                      <p className="text-red-500 text-sm">{form.formState.errors.content.message}</p>
+                    )}
                   </div>
 
                   <input
