@@ -22,10 +22,12 @@ export function registerRoutes(app: Express): Server {
       }
 
       console.log("Ricevuta richiesta di creazione nota:", {
-        userId: req.user.id,
+        userId: req.user?.id,
+        isAuthenticated: req.isAuthenticated(),
         hasTitle: !!req.body.title,
         hasContent: !!req.body.content,
-        attachmentsCount: req.body.attachments?.length
+        attachmentsCount: req.body.attachments?.length,
+        contentLength: req.get('content-length')
       });
 
       const contentLength = parseInt(req.get('content-length') || '0');
