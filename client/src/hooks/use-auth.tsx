@@ -1,4 +1,3 @@
-
 import { createContext, ReactNode, useContext } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { InsertUser, User as SelectUser } from "@shared/schema";
@@ -17,7 +16,7 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  
+
   const {
     data: user,
     error,
@@ -32,7 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             'Cache-Control': 'no-cache',
           }
         });
-        
+
         if (!res.ok) {
           if (res.status === 401) {
             queryClient.setQueryData(["user"], null);
@@ -40,24 +39,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           throw new Error(await res.text());
         }
-        
+
         const data = await res.json();
         if (!data || !data.id) {
           queryClient.setQueryData(["user"], null);
           return null;
         }
-        
+
         return data;
       } catch (error) {
         queryClient.setQueryData(["user"], null);
         throw error;
       }
     },
-    refetchInterval: 5 * 60 * 1000, // Refresh ogni 5 minuti
-    staleTime: 4 * 60 * 1000, // Considera i dati obsoleti dopo 4 minuti
-    refetchInterval: 0,
+    staleTime: 4 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000, 
     refetchOnWindowFocus: true,
-    retry: 1
+    retry: 3,
+    retryDelay: 1000
   });
 
   const loginMutation = useMutation({
