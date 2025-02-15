@@ -31,6 +31,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryFn: getQueryFn({ on401: "returnNull" }),
     retry: 3,
     retryDelay: 1000,
+    staleTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true
   });
 
   const loginMutation = useMutation({
