@@ -18,8 +18,6 @@ sessionStore.on('error', (error) => {
 
 export { sessionStore };
 
-const PostgresSessionStore = connectPg(session);
-
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -33,39 +31,44 @@ export class DatabaseStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
-    this.sessionStore = new PostgresSessionStore({
+    this.sessionStore = new PostgresStore({
       pool,
       createTableIfMissing: true,
-      tableName: 'session',
-      schemaName: 'public',
-      ttl: 24 * 60 * 60,
-      pruneSessionInterval: 15 * 60,
-      errorLog: console.error
+      tableName: 'session'
     });
   }
 
   async getUser(id: number): Promise<User | undefined> {
+    console.log("[Storage] Ricerca utente con ID:", id);
     const [user] = await db.select().from(users).where(eq(users.id, id));
+    console.log("[Storage] Utente trovato:", user ? "Sì" : "No");
     return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
+    console.log("[Storage] Ricerca utente con username:", username);
     const [user] = await db.select().from(users).where(eq(users.username, username));
+    console.log("[Storage] Utente trovato:", user ? "Sì" : "No");
     return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
+    console.log("[Storage] Creazione nuovo utente:", insertUser.username);
     const [user] = await db.insert(users).values(insertUser).returning();
+    console.log("[Storage] Nuovo utente creato con ID:", user.id);
     return user;
   }
 
   async getNotes(userId: number): Promise<Note[]> {
-    return await db.select().from(notes).where(eq(notes.userId, userId));
+    console.log("[Storage] Recupero note per utente ID:", userId);
+    const notesList = await db.select().from(notes).where(eq(notes.userId, userId));
+    console.log("[Storage] Numero di note trovate:", notesList.length);
+    return notesList;
   }
 
   async createNote(userId: number, insertNote: InsertNote): Promise<Note> {
     try {
-      console.log("Tentativo di creazione nota con dati:", {
+      console.log("[Storage] Inizio creazione nota:", {
         userId,
         title: insertNote.title,
         contentLength: insertNote.content?.length,
@@ -74,27 +77,34 @@ export class DatabaseStorage implements IStorage {
 
       // Validazione base
       if (!userId) {
-        throw new Error("ID utente non valido");
+        const error = new Error("ID utente non valido");
+        console.error("[Storage] Errore validazione:", error.message);
+        throw error;
       }
 
       if (!insertNote.title || !insertNote.content) {
-        throw new Error("Titolo e contenuto sono obbligatori");
+        const error = new Error("Titolo e contenuto sono obbligatori");
+        console.error("[Storage] Errore validazione:", error.message);
+        throw error;
       }
 
       // Gestione allegati
       let processedAttachments = null;
       if (insertNote.attachments && insertNote.attachments.length > 0) {
+        console.log("[Storage] Processamento allegati...");
         const totalSize = insertNote.attachments.reduce((sum, att) => sum + att.data.length, 0);
-        console.log("Dimensione totale allegati:", totalSize / 1024 / 1024, "MB");
+        console.log("[Storage] Dimensione totale allegati:", totalSize / 1024 / 1024, "MB");
 
-        // Validazione dimensione totale 10MB
         if (totalSize > 10 * 1024 * 1024) {
-          throw new Error("La dimensione totale degli allegati supera i 10MB");
+          const error = new Error("La dimensione totale degli allegati supera i 10MB");
+          console.error("[Storage] Errore dimensione allegati:", error.message);
+          throw error;
         }
         processedAttachments = insertNote.attachments;
+        console.log("[Storage] Allegati processati con successo");
       }
 
-      console.log("Inserimento nota nel database...");
+      console.log("[Storage] Inserimento nota nel database...");
       const [note] = await db.insert(notes).values({
         userId,
         title: insertNote.title,
@@ -102,10 +112,15 @@ export class DatabaseStorage implements IStorage {
         attachments: processedAttachments,
       }).returning();
 
-      console.log("Nota creata con successo:", note.id);
+      console.log("[Storage] Nota creata con successo:", {
+        noteId: note.id,
+        userId: note.userId,
+        hasAttachments: !!note.attachments
+      });
+
       return note;
     } catch (error) {
-      console.error("Errore durante la creazione della nota:", error);
+      console.error("[Storage] Errore critico durante la creazione della nota:", error);
       throw error;
     }
   }

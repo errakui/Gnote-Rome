@@ -2,8 +2,13 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
+import express from "express";
 
 export function registerRoutes(app: Express): Server {
+  // Aumenta il limite del body parser per gestire gli allegati
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
   setupAuth(app);
 
   app.get("/api/notes", async (req, res) => {
@@ -12,56 +17,47 @@ export function registerRoutes(app: Express): Server {
       return res.sendStatus(401);
     }
     try {
+      console.log(`[GET /api/notes] Recupero note per l'utente ID: ${req.user.id}`);
       const notes = await storage.getNotes(req.user.id);
-      console.log(`Note recuperate per l'utente ${req.user.id}`);
+      console.log(`[GET /api/notes] Recuperate ${notes.length} note con successo`);
       res.json(notes);
     } catch (error) {
-      console.error("Errore nel recupero delle note:", error);
-      res.status(500).json({ error: "Errore nel recupero delle note" });
+      console.error("[GET /api/notes] Errore nel recupero delle note:", error);
+      res.status(500).json({ 
+        error: "Errore nel recupero delle note", 
+        details: error instanceof Error ? error.message : "Errore sconosciuto" 
+      });
     }
   });
 
   app.post("/api/notes", async (req, res) => {
     try {
       if (!req.isAuthenticated() || !req.user?.id) {
-        console.error("Creazione nota fallita: Utente non autenticato");
+        console.error("[POST /api/notes] Creazione nota fallita: Utente non autenticato");
         return res.sendStatus(401);
       }
 
-      const fileSize = parseInt(req.get('content-length') || '0');
-      const maxSize = 10 * 1024 * 1024; // 10MB
-      
-      if (fileSize > maxSize) {
-        return res.status(413).json({
-          error: "File troppo grande. Massimo 10MB permesso."
-        });
-      }
-
-      console.log("Ricevuta richiesta di creazione nota:", {
-        userId: req.user?.id,
-        isAuthenticated: req.isAuthenticated(),
-        hasTitle: !!req.body.title,
-        hasContent: !!req.body.content,
-        attachmentsCount: req.body.attachments?.length,
-        contentLength: req.get('content-length')
+      console.log("[POST /api/notes] Richiesta ricevuta:", {
+        userId: req.user.id,
+        title: req.body.title,
+        contentLength: req.body.content?.length || 0,
+        attachmentsCount: req.body.attachments?.length || 0
       });
 
-      const contentLength = parseInt(req.get('content-length') || '0');
-      const limit = 10 * 1024 * 1024; // 10MB in bytes
-
-      if (contentLength > limit) {
-        return res.status(413).json({
-          error: "La dimensione totale della richiesta supera il limite di 10MB"
-        });
+      if (!req.body.title || !req.body.content) {
+        console.error("[POST /api/notes] Validazione fallita: titolo o contenuto mancante");
+        return res.status(400).json({ error: "Titolo e contenuto sono obbligatori" });
       }
 
+      console.log("[POST /api/notes] Inizio creazione nota nel database");
       const note = await storage.createNote(req.user.id, req.body);
-      console.log("Nota creata con successo:", note.id);
+      console.log(`[POST /api/notes] Nota creata con successo, ID: ${note.id}`);
       res.status(201).json(note);
     } catch (error) {
-      console.error("Error creating note:", error);
-      res.status(500).json({ 
-        error: error instanceof Error ? error.message : "Failed to create note" 
+      console.error("[POST /api/notes] Errore durante la creazione della nota:", error);
+      res.status(500).json({
+        error: "Errore nella creazione della nota",
+        details: error instanceof Error ? error.message : "Errore sconosciuto"
       });
     }
   });
