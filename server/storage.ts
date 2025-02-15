@@ -1,6 +1,6 @@
 import { notes, users, type User, type InsertUser, type Note, type InsertNote } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -73,8 +73,7 @@ export class DatabaseStorage implements IStorage {
     console.log("[Storage] Recupero nota ID:", noteId, "per utente ID:", userId);
     const [note] = await db.select()
       .from(notes)
-      .where(eq(notes.id, noteId))
-      .where(eq(notes.userId, userId));
+      .where(and(eq(notes.id, noteId), eq(notes.userId, userId)));
     return note;
   }
 
@@ -82,8 +81,7 @@ export class DatabaseStorage implements IStorage {
     console.log("[Storage] Aggiornamento nota ID:", noteId, "per utente ID:", userId);
     const [updated] = await db.update(notes)
       .set(updateData)
-      .where(eq(notes.id, noteId))
-      .where(eq(notes.userId, userId))
+      .where(and(eq(notes.id, noteId), eq(notes.userId, userId)))
       .returning();
     return updated;
   }
@@ -92,8 +90,7 @@ export class DatabaseStorage implements IStorage {
     console.log("[Storage] Eliminazione nota ID:", noteId, "per utente ID:", userId);
     try {
       const result = await db.delete(notes)
-        .where(eq(notes.id, noteId))
-        .where(eq(notes.userId, userId));
+        .where(and(eq(notes.id, noteId), eq(notes.userId, userId)));
 
       const deleted = result.rowCount === 1;
       console.log("[Storage] Nota eliminata:", deleted);
@@ -115,31 +112,22 @@ export class DatabaseStorage implements IStorage {
 
       // Validazione base
       if (!userId) {
-        const error = new Error("ID utente non valido");
-        console.error("[Storage] Errore validazione:", error.message);
-        throw error;
+        throw new Error("ID utente non valido");
       }
 
       if (!insertNote.title || !insertNote.content) {
-        const error = new Error("Titolo e contenuto sono obbligatori");
-        console.error("[Storage] Errore validazione:", error.message);
-        throw error;
+        throw new Error("Titolo e contenuto sono obbligatori");
       }
 
-      // Gestione allegati
-      let processedAttachments = null;
+      // Calcolo dimensione totale allegati
       if (insertNote.attachments && insertNote.attachments.length > 0) {
-        console.log("[Storage] Processamento allegati...");
-        const totalSize = insertNote.attachments.reduce((sum, att) => sum + att.data.length, 0);
+        console.log("[Storage] Validazione allegati...");
+        const totalSize = insertNote.attachments.reduce((sum, att) => sum + att.size, 0);
         console.log("[Storage] Dimensione totale allegati:", totalSize / 1024 / 1024, "MB");
 
-        if (totalSize > 10 * 1024 * 1024) {
-          const error = new Error("La dimensione totale degli allegati supera i 10MB");
-          console.error("[Storage] Errore dimensione allegati:", error.message);
-          throw error;
+        if (totalSize > 25 * 1024 * 1024) { // 25MB totali
+          throw new Error("La dimensione totale degli allegati supera i 25MB");
         }
-        processedAttachments = insertNote.attachments;
-        console.log("[Storage] Allegati processati con successo");
       }
 
       console.log("[Storage] Inserimento nota nel database...");
@@ -147,13 +135,13 @@ export class DatabaseStorage implements IStorage {
         userId,
         title: insertNote.title,
         content: insertNote.content,
-        attachments: processedAttachments,
+        attachments: insertNote.attachments || [],
       }).returning();
 
       console.log("[Storage] Nota creata con successo:", {
         noteId: note.id,
         userId: note.userId,
-        hasAttachments: !!note.attachments
+        hasAttachments: note.attachments && note.attachments.length > 0
       });
 
       return note;

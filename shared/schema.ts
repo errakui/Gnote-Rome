@@ -15,9 +15,10 @@ export const notes = pgTable("notes", {
   content: text("content").notNull(),
   attachments: jsonb("attachments").$type<{
     type: "image" | "video";
-    data: string; // Base64 encrypted data
+    url: string;
     fileName: string;
     mimeType: string;
+    size: number;
   }[]>(),
   userId: serial("user_id")
     .notNull()
@@ -25,22 +26,32 @@ export const notes = pgTable("notes", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-// Schema per la validazione dell'input
 export const insertUserSchema = createInsertSchema(users).extend({
   password: z.string().min(6, "La password deve essere di almeno 6 caratteri"),
 });
 
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per file
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+const ALLOWED_VIDEO_TYPES = ["video/mp4", "video/webm"];
+
 const attachmentSchema = z.object({
   type: z.enum(["image", "video"]),
-  data: z.string(),
-  fileName: z.string(),
-  mimeType: z.string(),
+  url: z.string().url("URL non valido"),
+  fileName: z.string().max(255, "Nome file troppo lungo"),
+  mimeType: z.string().refine(
+    (mime) => [...ALLOWED_IMAGE_TYPES, ...ALLOWED_VIDEO_TYPES].includes(mime),
+    "Tipo di file non supportato"
+  ),
+  size: z.number().max(MAX_FILE_SIZE, "File troppo grande (max 5MB)"),
 });
 
 export const insertNoteSchema = createInsertSchema(notes, {
-  title: z.string().min(1, "Il titolo è obbligatorio"),
+  title: z.string().min(1, "Il titolo è obbligatorio").max(255, "Titolo troppo lungo"),
   content: z.string().min(1, "Il contenuto è obbligatorio"),
-  attachments: z.array(attachmentSchema).optional(),
+  attachments: z.array(attachmentSchema)
+    .max(5, "Massimo 5 allegati per nota")
+    .optional()
+    .transform(val => val || []),
 }).omit({ userId: true, createdAt: true });
 
 // Types
