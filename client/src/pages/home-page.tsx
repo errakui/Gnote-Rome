@@ -50,12 +50,16 @@ export default function HomePage() {
       content: string;
       attachments?: Attachment[];
     }) => {
+      console.log("Dati inviati al server:", data);
       const res = await apiRequest("POST", "/api/notes", data);
       if (!res.ok) {
         const errorText = await res.text();
+        console.error("Errore dal server:", errorText);
         throw new Error(errorText);
       }
-      return res.json();
+      const jsonResponse = await res.json();
+      console.log("Risposta dal server:", jsonResponse);
+      return jsonResponse;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notes"] });
@@ -78,6 +82,8 @@ export default function HomePage() {
 
   const onSubmit = async (formData: FormData) => {
     try {
+      console.log("Inizio salvataggio nota:", formData);
+
       if (!formData.title || !formData.content) {
         toast({
           title: "Errore",
@@ -87,13 +93,16 @@ export default function HomePage() {
         return;
       }
 
+      console.log("Criptaggio contenuto...");
       const encryptedContent = encryptText(formData.content, user!.password);
 
-      let attachments = [];
+      let attachments: Attachment[] = [];
       if (formData.attachments && formData.attachments.length > 0) {
+        console.log("Processamento allegati...");
         attachments = await Promise.all(
           formData.attachments.map(async (file: File) => {
             try {
+              console.log("Criptaggio file:", file.name);
               const encryptedData = await encryptFile(file, user!.password);
               return {
                 type: file.type.startsWith('image/') ? ('image' as const) : ('video' as const),
@@ -109,11 +118,14 @@ export default function HomePage() {
         );
       }
 
+      console.log("Invio dati al server...");
       await createNoteMutation.mutateAsync({
         title: formData.title,
         content: encryptedContent,
-        attachments
+        attachments: attachments.length > 0 ? attachments : undefined
       });
+
+      console.log("Salvataggio completato con successo");
 
     } catch (error) {
       console.error('Errore durante il salvataggio:', error);
