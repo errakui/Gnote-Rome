@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
-import { Trash2, Edit2, Save, X, Image as ImageIcon, Film, Plus, X as XIcon } from "lucide-react";
+import { Trash2, Edit2, Save, X, Plus, X as XIcon } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -165,8 +165,8 @@ export function NoteViewer({ noteId, onClose }: Props) {
   if (!note || !user) return null;
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center border-b border-zinc-800 pb-4">
+    <div className="h-full flex flex-col">
+      <div className="flex justify-between items-center p-6 border-b border-zinc-800">
         <h2 className="text-2xl font-bold">{note.title}</h2>
         <div className="flex gap-2">
           {isEditing ? (
@@ -200,112 +200,105 @@ export function NoteViewer({ noteId, onClose }: Props) {
           )}
         </div>
       </div>
-
-      {isEditing ? (
-        <div className="space-y-4">
-          <Textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            className="w-full min-h-[300px] text-lg bg-black/20"
-            placeholder="Scrivi qui il contenuto della nota..."
-          />
-
-          <div className="border-2 border-dashed border-zinc-800 rounded-lg p-4 cursor-pointer hover:border-zinc-700 transition-colors"
-               onClick={() => fileInputRef?.click()}>
-            <input
-              type="file"
-              ref={el => setFileInputRef(el)}
-              className="hidden"
-              multiple
-              accept="image/*,video/*"
-              onChange={handleFileChange}
+      <div className="flex-1 overflow-y-auto p-6">
+        {isEditing ? (
+          <div className="space-y-6">
+            <Textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              className="w-full min-h-[300px] text-lg bg-black/20"
+              placeholder="Scrivi qui il contenuto della nota..."
             />
-            <div className="flex flex-col items-center gap-2">
-              <Plus className="h-6 w-6" />
-              <p className="text-sm text-zinc-400">
-                Aggiungi immagini o video (max 10MB)
-              </p>
-            </div>
-          </div>
 
-          {newAttachments.length > 0 && (
-            <div className="grid grid-cols-2 gap-4">
-              {newAttachments.map((file, index) => (
-                <div key={index} className="relative group">
-                  {file.type.startsWith('image/') ? (
-                    <img
-                      src={URL.createObjectURL(file)}
-                      alt={file.name}
-                      className="w-full h-40 object-cover rounded-lg"
-                    />
-                  ) : (
-                    <video
-                      src={URL.createObjectURL(file)}
-                      className="w-full h-40 object-cover rounded-lg"
-                      controls
-                    />
-                  )}
-                  <button
-                    onClick={() => removeAttachment(index)}
-                    className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1"
-                  >
-                    <XIcon className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
+            <div 
+              className="border-2 border-dashed border-zinc-800 rounded-lg p-6 cursor-pointer hover:border-zinc-700 transition-colors"
+              onClick={() => fileInputRef?.click()}
+            >
+              <input
+                type="file"
+                ref={el => setFileInputRef(el)}
+                className="hidden"
+                multiple
+                accept="image/*,video/*"
+                onChange={handleFileChange}
+              />
+              <div className="flex flex-col items-center gap-2">
+                <Plus className="h-8 w-8" />
+                <p className="text-sm text-zinc-400">
+                  Aggiungi immagini o video (max 10MB)
+                </p>
+              </div>
             </div>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-8">
-          <div className="whitespace-pre-wrap text-lg bg-black/20 rounded-lg p-6">
-            {content}
-          </div>
 
-          {note.attachments && note.attachments.length > 0 && (
-            <div className="grid grid-cols-2 gap-6">
-              {note.attachments.map((attachment, index) => {
-                try {
-                  const decryptedData = decryptFile(attachment.data, user.password);
-                  return (
-                    <div key={index} className="space-y-2">
-                      <div className="flex items-center gap-2 text-sm text-zinc-400">
+            {newAttachments.length > 0 && (
+              <div className="grid grid-cols-2 gap-6">
+                {newAttachments.map((file, index) => (
+                  <div key={index} className="relative group">
+                    {file.type.startsWith('image/') ? (
+                      <img
+                        src={URL.createObjectURL(file)}
+                        alt={file.name}
+                        className="w-full rounded-lg border border-zinc-800"
+                      />
+                    ) : (
+                      <video
+                        src={URL.createObjectURL(file)}
+                        className="w-full rounded-lg border border-zinc-800"
+                        controls
+                      />
+                    )}
+                    <button
+                      onClick={() => removeAttachment(index)}
+                      className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1"
+                    >
+                      <XIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-8">
+            <div className="whitespace-pre-wrap text-lg bg-black/20 rounded-lg p-6">
+              {content}
+            </div>
+
+            {note.attachments && note.attachments.length > 0 && (
+              <div className="grid grid-cols-2 gap-6">
+                {note.attachments.map((attachment, index) => {
+                  try {
+                    const decryptedData = decryptFile(attachment.data, user.password);
+                    return (
+                      <div key={index}>
                         {attachment.type === 'image' ? (
-                          <ImageIcon className="h-4 w-4" />
+                          <img
+                            src={`data:${attachment.mimeType};base64,${decryptedData}`}
+                            alt={attachment.fileName}
+                            className="w-full rounded-lg border border-zinc-800"
+                          />
                         ) : (
-                          <Film className="h-4 w-4" />
+                          <video
+                            src={`data:${attachment.mimeType};base64,${decryptedData}`}
+                            controls
+                            className="w-full rounded-lg border border-zinc-800"
+                          />
                         )}
-                        <span>{attachment.fileName}</span>
                       </div>
-
-                      {attachment.type === 'image' ? (
-                        <img
-                          src={`data:${attachment.mimeType};base64,${decryptedData}`}
-                          alt={attachment.fileName}
-                          className="w-full rounded-lg border border-zinc-800"
-                        />
-                      ) : (
-                        <video
-                          src={`data:${attachment.mimeType};base64,${decryptedData}`}
-                          controls
-                          className="w-full rounded-lg border border-zinc-800"
-                        />
-                      )}
-                    </div>
-                  );
-                } catch (error) {
-                  return (
-                    <div key={index} className="p-4 border border-red-500 rounded-lg text-red-500">
-                      Errore nel caricamento del file
-                    </div>
-                  );
-                }
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
+                    );
+                  } catch (error) {
+                    return (
+                      <div key={index} className="p-4 border border-red-500 rounded-lg text-red-500">
+                        Errore nel caricamento del file
+                      </div>
+                    );
+                  }
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>

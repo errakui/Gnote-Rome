@@ -382,7 +382,7 @@ export default function HomePage() {
                   </CardContent>
                 </Card>
               </DialogTrigger>
-              <DialogContent className="max-w-[90vw] w-[90vw] h-[90vh] overflow-y-auto bg-zinc-900 border-zinc-800">
+              <DialogContent className="max-w-[95vw] w-[95vw] h-[95vh] p-0 bg-zinc-900 border-zinc-800">
                 {selectedNoteId === note.id && (
                   <NoteViewer
                     noteId={note.id}
