@@ -170,11 +170,11 @@ export function setupAuth(app: Express) {
   });
 
   app.get("/api/user", (req, res) => {
-    if (!req.isAuthenticated()) {
+    if (!req.isAuthenticated() || !req.user) {
       console.log("Tentativo di accesso non autorizzato all'API /user");
       return res.sendStatus(401);
     }
-    console.log("Dati utente inviati per:", req.user?.username);
-    res.json({ id: req.user?.id, username: req.user?.username });
+    console.log("Dati utente inviati per:", req.user.username);
+    res.json({ id: req.user.id, username: req.user.username });
   });
 }
