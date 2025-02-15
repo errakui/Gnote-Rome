@@ -46,7 +46,11 @@ export function decryptText(ciphertext: string, key: string): string {
   );
 
   return decrypted.toString(CryptoJS.enc.Utf8);
-}
+} catch (error) {
+      console.error("[Debug] Errore decrittografia:", error);
+      throw new Error("Errore durante la decrittografia del file");
+    }
+  }
 
 export function encryptFile(
   file: File,
