@@ -12,9 +12,18 @@ if (!process.env.DATABASE_URL) {
 
 const pool = new Pool({ 
   connectionString: process.env.DATABASE_URL,
-  max: 1,
+  max: 5,
+  idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
   ssl: true
+});
+
+pool.on('connect', () => {
+  console.log('Database connesso correttamente');
+});
+
+pool.on('error', (err) => {
+  console.error('Errore database:', err);
 });
 
 // Gestione errori basilare
