@@ -77,7 +77,9 @@ export default function HomePage() {
 
   const onSubmit = async (data: FormData) => {
     try {
-      if (!data.title || !data.content) {
+      const formValues = form.getValues();
+
+      if (!formValues.title || !formValues.content) {
         toast({
           title: "Errore",
           description: "Titolo e contenuto sono obbligatori",
@@ -99,14 +101,13 @@ export default function HomePage() {
       const formData = new FormData();
 
       // Encrypt and add content
-      const encryptedContent = encryptText(data.content, user.password);
-      formData.append('title', data.title);
+      const encryptedContent = encryptText(formValues.content, user.password);
+      formData.append('title', formValues.title);
       formData.append('content', encryptedContent);
 
       // Add files if present
-      const currentFiles = form.getValues('files');
-      if (currentFiles?.length > 0) {
-        currentFiles.forEach((file) => {
+      if (previewFiles.length > 0) {
+        previewFiles.forEach(({ file }) => {
           formData.append('files', file);
         });
       }
