@@ -69,9 +69,9 @@ export class DatabaseStorage implements IStorage {
         const totalSize = insertNote.attachments.reduce((sum, att) => sum + att.data.length, 0);
         console.log("Dimensione totale allegati:", totalSize / 1024 / 1024, "MB");
 
-        // Validazione dimensione totale aumentata a 50MB
-        if (totalSize > 50 * 1024 * 1024) {
-          throw new Error("La dimensione totale degli allegati supera i 50MB");
+        // Validazione dimensione totale 10MB
+        if (totalSize > 10 * 1024 * 1024) {
+          throw new Error("La dimensione totale degli allegati supera i 10MB");
         }
         processedAttachments = insertNote.attachments;
       }
