@@ -51,31 +51,28 @@ export function NoteViewer({ noteId, onClose }: Props) {
   const { data: note, isLoading } = useQuery<Note>({
     queryKey: ["/api/notes", noteId],
     onSuccess: (data) => {
-      if (!data?.content || !user?.password) {
-        console.warn("Dati mancanti:", {
-          hasContent: !!data?.content,
-          hasPassword: !!user?.password
-        });
+      if (!data?.content) {
+        console.warn("Contenuto nota mancante");
         return;
       }
 
       try {
         console.log("Tentativo decrittazione nota:", {
           contentLength: data.content.length,
-          passwordLength: user.password.length
+          
         });
-        
+
         const decrypted = decryptText(data.content, user.password);
         console.log("Risultato decrittazione:", {
           success: !!decrypted,
           decryptedLength: decrypted?.length
         });
-        
+
         if (!decrypted) {
           console.warn("Decrittazione fallita o contenuto vuoto");
           return;
         }
-        
+
         setEditContent(decrypted);
 
         let decryptedAtts: { data: string; type: string; mimeType: string }[] =
