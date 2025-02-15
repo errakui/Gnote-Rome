@@ -32,18 +32,15 @@ export function setupAuth(app: Express) {
   console.log("Configurazione delle impostazioni della sessione...");
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET!,
-    resave: false,
-    saveUninitialized: false,
+    resave: true,
+    saveUninitialized: true,
     store: storage.sessionStore,
     cookie: {
-      secure: app.get("env") === "production",
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+      secure: false,
+      maxAge: 24 * 60 * 60 * 1000,
+      httpOnly: true
     }
   };
-
-  if (app.get("env") === "production") {
-    app.set("trust proxy", 1);
-  }
 
   app.use(session(sessionSettings));
   app.use(passport.initialize());
