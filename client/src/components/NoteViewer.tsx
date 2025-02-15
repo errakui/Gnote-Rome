@@ -36,19 +36,15 @@ export function NoteViewer({ noteId, onClose }: Props) {
 
   const { data: note, isLoading } = useQuery<Note>({
     queryKey: ["/api/notes", noteId],
-    queryFn: async () => {
-      const res = await apiRequest("GET", `/api/notes/${noteId}`);
-      if (!res.ok) throw new Error("Errore nel recupero della nota");
-      return res.json();
-    },
   });
 
   useEffect(() => {
     if (note && user) {
       try {
-        const decrypted = decryptText(note.content, user.password);
-        setContent(decrypted);
-        setEditContent(decrypted);
+        const decryptedContent = decryptText(note.content, user.password);
+        console.log("Contenuto decriptato:", decryptedContent); // Debug
+        setContent(decryptedContent);
+        setEditContent(decryptedContent);
       } catch (error) {
         console.error("Errore decrittazione:", error);
         toast({
@@ -91,7 +87,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notes", noteId] });
       setIsEditing(false);
       setNewAttachments([]);
       toast({
@@ -144,19 +140,19 @@ export function NoteViewer({ noteId, onClose }: Props) {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    const validFiles = files.filter(file => {
-      const isValid = file.type.startsWith('image/') || file.type.startsWith('video/');
-      const isSmall = file.size <= 10 * 1024 * 1024; // 10MB
-      return isValid && isSmall;
-    });
+    const maxSize = 10 * 1024 * 1024; // 10MB
 
-    if (validFiles.length !== files.length) {
-      toast({
-        title: "File non validi",
-        description: "Alcuni file sono stati ignorati perché non supportati o troppo grandi (max 10MB)",
-        variant: "destructive"
-      });
-    }
+    const validFiles = files.filter(file => {
+      if (file.size > maxSize) {
+        toast({
+          title: "File troppo grande",
+          description: `Il file ${file.name} supera il limite di 10MB`,
+          variant: "destructive"
+        });
+        return false;
+      }
+      return file.type.startsWith('image/') || file.type.startsWith('video/');
+    });
 
     setNewAttachments(prev => [...prev, ...validFiles]);
   };
@@ -165,7 +161,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
     setNewAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
-  if (!note || !user || isLoading) {
+  if (isLoading || !note || !user) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
@@ -173,8 +169,11 @@ export function NoteViewer({ noteId, onClose }: Props) {
     );
   }
 
+  const decryptedContent = decryptText(note.content, user.password);
+  console.log("Rendering content:", decryptedContent); // Debug
+
   return (
-    <div className="h-full flex flex-col">
+    <div className="flex flex-col h-full">
       <div className="flex justify-between items-center p-6 border-b border-zinc-800">
         <h2 className="text-2xl font-bold">{note.title}</h2>
         <div className="flex gap-2">
@@ -272,7 +271,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
         ) : (
           <div className="space-y-8">
             <div className="whitespace-pre-wrap text-lg bg-black/20 rounded-lg p-6">
-              {content}
+              {decryptedContent}
             </div>
 
             {note.attachments && note.attachments.length > 0 && (
@@ -298,6 +297,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
                       </div>
                     );
                   } catch (error) {
+                    console.error("Errore decriptazione allegato:", error);
                     return (
                       <div key={index} className="p-4 border border-red-500 rounded-lg text-red-500">
                         Errore nel caricamento del file
