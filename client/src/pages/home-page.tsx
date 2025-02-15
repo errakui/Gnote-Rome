@@ -355,7 +355,7 @@ export default function HomePage() {
                     {user && (
                       <>
                         <p className="whitespace-pre-wrap font-mono text-zinc-300 mb-4 line-clamp-3">
-                          {decryptText(note.content, user.password)}
+                          {note.content ? decryptText(note.content, user.password) : ''}
                         </p>
                         {note.attachments && note.attachments.length > 0 && (
                           <div className="flex gap-2 text-sm text-zinc-400">

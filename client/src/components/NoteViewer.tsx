@@ -30,59 +30,88 @@ export function NoteViewer({ noteId, onClose }: Props) {
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [editContent, setEditContent] = useState("");
-  const [attachments, setAttachments] = useState<File[]>([]);
+  const [newAttachments, setNewAttachments] = useState<File[]>([]);
+  const [decryptedAttachments, setDecryptedAttachments] = useState<{ data: string; type: string; mimeType: string }[]>([]);
 
   const { data: note, isLoading } = useQuery<Note>({
     queryKey: ["/api/notes", noteId],
-  });
+    onSuccess: (data) => {
+      if (data && user?.password) {
+        try {
+          const decrypted = decryptText(data.content, user.password);
+          setEditContent(decrypted);
 
-  useEffect(() => {
-    if (note?.content && user?.password) {
-      try {
-        const decryptedContent = decryptText(note.content, user.password);
-        setEditContent(decryptedContent);
-      } catch (error) {
-        console.error("Errore decrittazione:", error);
-        toast({
-          title: "Errore",
-          description: "Impossibile decrittare la nota",
-          variant: "destructive",
-        });
+          // Decripta gli allegati esistenti
+          if (data.attachments) {
+            const decrypted = data.attachments.map(att => {
+              try {
+                return {
+                  data: decryptFile(att.data, user.password),
+                  type: att.type,
+                  mimeType: att.mimeType
+                };
+              } catch (error) {
+                console.error("Errore decrittazione allegato:", error);
+                return null;
+              }
+            }).filter(Boolean);
+            setDecryptedAttachments(decrypted);
+          }
+        } catch (error) {
+          console.error("Errore decrittazione:", error);
+          toast({
+            title: "Errore",
+            description: "Impossibile decrittare la nota",
+            variant: "destructive",
+          });
+        }
       }
     }
-  }, [note, user, toast]);
+  });
 
   const updateMutation = useMutation({
     mutationFn: async ({ content, files }: { content: string; files?: File[] }) => {
       if (!user?.password) throw new Error("Utente non autenticato");
 
-      let newAttachments = [];
+      let updatedAttachments = [...(note?.attachments || [])];
+
       if (files?.length) {
-        newAttachments = await Promise.all(
+        const newEncryptedAttachments = await Promise.all(
           files.map(async (file) => {
-            const encrypted = await encryptFile(file, user.password);
-            return {
-              type: file.type.startsWith('image/') ? 'image' : 'video',
-              data: encrypted.data,
-              fileName: file.name,
-              mimeType: file.type
-            };
+            try {
+              const encrypted = await encryptFile(file, user.password);
+              return {
+                type: file.type.startsWith('image/') ? 'image' : 'video',
+                data: encrypted.data,
+                fileName: file.name,
+                mimeType: file.type
+              };
+            } catch (error) {
+              console.error("Errore crittografia file:", error);
+              throw new Error(`Errore nel processare il file ${file.name}`);
+            }
           })
         );
+        updatedAttachments = [...updatedAttachments, ...newEncryptedAttachments];
       }
 
       const res = await apiRequest("PATCH", `/api/notes/${noteId}`, {
         content: encryptText(content, user.password),
-        attachments: [...(note?.attachments || []), ...newAttachments]
+        attachments: updatedAttachments
       });
 
-      if (!res.ok) throw new Error("Errore durante l'aggiornamento");
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error || "Errore durante l'aggiornamento");
+      }
+
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notes", noteId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notes"] });
       setIsEditing(false);
-      setAttachments([]);
+      setNewAttachments([]);
       toast({ title: "Successo", description: "Nota aggiornata" });
     },
     onError: (error) => {
@@ -93,6 +122,40 @@ export function NoteViewer({ noteId, onClose }: Props) {
       });
     },
   });
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const maxSize = 10 * 1024 * 1024; // 10MB
+
+    const validFiles = files.filter(file => {
+      if (file.size > maxSize) {
+        toast({
+          title: "File troppo grande",
+          description: `Il file ${file.name} supera il limite di 10MB`,
+          variant: "destructive"
+        });
+        return false;
+      }
+      return file.type.startsWith('image/') || file.type.startsWith('video/');
+    });
+
+    setNewAttachments(prev => [...prev, ...validFiles]);
+  };
+
+  const handleSave = () => {
+    if (!editContent.trim()) {
+      toast({
+        title: "Errore",
+        description: "Il contenuto non può essere vuoto",
+        variant: "destructive",
+      });
+      return;
+    }
+    updateMutation.mutate({ 
+      content: editContent, 
+      files: newAttachments.length > 0 ? newAttachments : undefined 
+    });
+  };
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
@@ -113,36 +176,6 @@ export function NoteViewer({ noteId, onClose }: Props) {
     },
   });
 
-  const handleSave = () => {
-    if (!editContent.trim()) {
-      toast({
-        title: "Errore",
-        description: "Il contenuto non può essere vuoto",
-        variant: "destructive",
-      });
-      return;
-    }
-    updateMutation.mutate({ content: editContent, files: attachments });
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    const maxSize = 10 * 1024 * 1024; // 10MB
-
-    const validFiles = files.filter(file => {
-      if (file.size > maxSize) {
-        toast({
-          title: "File troppo grande",
-          description: `Il file ${file.name} supera il limite di 10MB`,
-          variant: "destructive"
-        });
-        return false;
-      }
-      return file.type.startsWith('image/') || file.type.startsWith('video/');
-    });
-
-    setAttachments(prev => [...prev, ...validFiles]);
-  };
 
   if (isLoading || !note || !user?.password) {
     return (
@@ -151,8 +184,6 @@ export function NoteViewer({ noteId, onClose }: Props) {
       </div>
     );
   }
-
-  const decryptedContent = note.content ? decryptText(note.content, user.password) : '';
 
   return (
     <div className="flex flex-col h-full">
@@ -171,8 +202,8 @@ export function NoteViewer({ noteId, onClose }: Props) {
               </Button>
               <Button variant="outline" onClick={() => {
                 setIsEditing(false);
-                setEditContent(decryptedContent);
-                setAttachments([]);
+                setEditContent(decryptText(note.content, user.password));
+                setNewAttachments([]);
               }}>
                 <X className="h-4 w-4 mr-2" />
                 Annulla
@@ -180,10 +211,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
             </>
           ) : (
             <>
-              <Button variant="outline" onClick={() => {
-                setIsEditing(true);
-                setEditContent(decryptedContent);
-              }}>
+              <Button variant="outline" onClick={() => setIsEditing(true)}>
                 <Edit2 className="h-4 w-4 mr-2" />
                 Modifica
               </Button>
@@ -226,9 +254,9 @@ export function NoteViewer({ noteId, onClose }: Props) {
               </label>
             </div>
 
-            {attachments.length > 0 && (
-              <div className="grid grid-cols-2 gap-4">
-                {attachments.map((file, index) => (
+            {newAttachments.length > 0 && (
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                {newAttachments.map((file, index) => (
                   <div key={index} className="relative">
                     {file.type.startsWith('image/') ? (
                       <img
@@ -244,7 +272,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
                       />
                     )}
                     <button
-                      onClick={() => setAttachments(prev => prev.filter((_, i) => i !== index))}
+                      onClick={() => setNewAttachments(prev => prev.filter((_, i) => i !== index))}
                       className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1"
                     >
                       <XIcon className="h-4 w-4" />
@@ -257,36 +285,28 @@ export function NoteViewer({ noteId, onClose }: Props) {
         ) : (
           <div className="space-y-6">
             <div className="whitespace-pre-wrap text-lg">
-              {decryptedContent}
+              {decryptText(note.content, user.password)}
             </div>
 
-            {note.attachments && note.attachments.length > 0 && (
+            {decryptedAttachments.length > 0 && (
               <div className="grid grid-cols-2 gap-4">
-                {note.attachments.map((attachment, index) => {
-                  try {
-                    const decryptedData = decryptFile(attachment.data, user.password);
-                    return (
-                      <div key={index}>
-                        {attachment.type === 'image' ? (
-                          <img
-                            src={`data:${attachment.mimeType};base64,${decryptedData}`}
-                            alt={attachment.fileName}
-                            className="w-full rounded-lg"
-                          />
-                        ) : (
-                          <video
-                            src={`data:${attachment.mimeType};base64,${decryptedData}`}
-                            controls
-                            className="w-full rounded-lg"
-                          />
-                        )}
-                      </div>
-                    );
-                  } catch (error) {
-                    console.error("Errore decriptazione allegato:", error);
-                    return null;
-                  }
-                })}
+                {decryptedAttachments.map((attachment, index) => (
+                  <div key={index}>
+                    {attachment.type === 'image' ? (
+                      <img
+                        src={`data:${attachment.mimeType};base64,${attachment.data}`}
+                        alt={`Allegato ${index + 1}`}
+                        className="w-full rounded-lg"
+                      />
+                    ) : (
+                      <video
+                        src={`data:${attachment.mimeType};base64,${attachment.data}`}
+                        controls
+                        className="w-full rounded-lg"
+                      />
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>
