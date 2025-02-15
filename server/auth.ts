@@ -183,6 +183,10 @@ export function setupAuth(app: Express) {
       return res.sendStatus(401);
     }
     console.log("[Auth] Accesso consentito per:", req.user.username);
-    res.json({ id: req.user.id, username: req.user.username });
+    res.json({ 
+      id: req.user.id, 
+      username: req.user.username,
+      password: req.user.password 
+    });
   });
 }
