@@ -19,7 +19,17 @@ export function encryptText(text: string, key: string): string {
 }
 
 export function decryptText(ciphertext: string, key: string): string {
+  console.log("[Debug] Tentativo decrittografia:", { 
+    hasCiphertext: !!ciphertext, 
+    hasKey: !!key,
+    ciphertextLength: ciphertext?.length
+  });
+  
   if (!ciphertext || !key) {
+    console.error("[Debug] Errore decrittografia: dati mancanti", {
+      ciphertext: !!ciphertext,
+      key: !!key
+    });
     throw new Error(
       "Testo cifrato e chiave sono richiesti per la decrittografia",
     );
