@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Note } from "@shared/schema";
 import { decryptText, decryptFile, encryptText, encryptFile } from "@/lib/crypto";
@@ -43,8 +43,12 @@ export function NoteViewer({ noteId, onClose }: Props) {
 
       try {
         const decrypted = decryptText(data.content, user.password);
+        if (!decrypted) {
+          console.warn("Decrittazione ha prodotto contenuto vuoto");
+          return;
+        }
         setEditContent(decrypted);
-        
+
         let decryptedAtts: { data: string; type: string; mimeType: string }[] = [];
         if (data.attachments && data.attachments.length > 0) {
           decryptedAtts = data.attachments
@@ -185,7 +189,6 @@ export function NoteViewer({ noteId, onClose }: Props) {
     },
   });
 
-
   if (isLoading || !note || !user?.password) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -211,7 +214,14 @@ export function NoteViewer({ noteId, onClose }: Props) {
               </Button>
               <Button variant="outline" onClick={() => {
                 setIsEditing(false);
-                setEditContent(decryptText(note.content, user.password));
+                if (note.content && user.password) {
+                  try {
+                    const decrypted = decryptText(note.content, user.password);
+                    setEditContent(decrypted);
+                  } catch (error) {
+                    console.error("Errore nel ripristino del contenuto:", error);
+                  }
+                }
                 setNewAttachments([]);
               }}>
                 <X className="h-4 w-4 mr-2" />
@@ -294,18 +304,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
         ) : (
           <div className="space-y-6">
             <div className="whitespace-pre-wrap text-lg">
-              {note.content && user?.password ? 
-                (() => {
-                  try {
-                    const decrypted = decryptText(note.content, user.password);
-                    return decrypted || "Nessun contenuto";
-                  } catch (error) {
-                    console.error("Errore decrittazione:", error);
-                    return editContent || "Errore nella decrittazione";
-                  }
-                })()
-                : editContent || 'Nessun contenuto'
-              }
+              {editContent || "Nessun contenuto"}
             </div>
 
             {decryptedAttachments.length > 0 && (
