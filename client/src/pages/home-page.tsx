@@ -13,7 +13,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { type Note, type Attachment } from "@shared/schema";
 import { useForm } from "react-hook-form";
-import { encryptText, decryptText, encryptFile, decryptFile } from "@/lib/crypto";
+import { encryptText, decryptText, encryptFile } from "@/lib/crypto";
 import { Label } from "@/components/ui/label";
 import { LogOut, Plus, Loader2, Lock, Shield, Binary, Image, Video, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -357,7 +357,6 @@ export default function HomePage() {
                         <p className="whitespace-pre-wrap font-mono text-zinc-300 mb-4 line-clamp-3">
                           {decryptText(note.content, user.password)}
                         </p>
-
                         {note.attachments && note.attachments.length > 0 && (
                           <div className="flex gap-2 text-sm text-zinc-400">
                             {note.attachments.some(a => a.type === 'image') && (
@@ -383,7 +382,7 @@ export default function HomePage() {
                   </CardContent>
                 </Card>
               </DialogTrigger>
-              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-6">
+              <DialogContent className="max-w-[90vw] w-[90vw] h-[90vh] p-6">
                 {selectedNoteId === note.id && (
                   <NoteViewer
                     noteId={note.id}

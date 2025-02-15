@@ -4,11 +4,10 @@ import { Note } from "@shared/schema";
 import { decryptText, decryptFile, encryptText } from "@/lib/crypto";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
-import { Trash2, Edit2, X, Save, Image, Film } from "lucide-react";
+import { Trash2, Edit2, Save, X } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,7 +29,6 @@ export function NoteViewer({ noteId, onClose }: Props) {
   const { user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
 
   const { data: note } = useQuery<Note>({
@@ -46,7 +44,6 @@ export function NoteViewer({ noteId, onClose }: Props) {
   useEffect(() => {
     if (note && user && !isEditing) {
       try {
-        setTitle(note.title);
         setContent(decryptText(note.content, user.password));
       } catch (error) {
         console.error("Errore decrittazione:", error);
@@ -60,11 +57,10 @@ export function NoteViewer({ noteId, onClose }: Props) {
   }, [note, user, isEditing]);
 
   const updateMutation = useMutation({
-    mutationFn: async (data: { title: string; content: string }) => {
+    mutationFn: async (newContent: string) => {
       if (!user) throw new Error("Utente non autenticato");
-      const encryptedContent = encryptText(data.content, user.password);
+      const encryptedContent = encryptText(newContent, user.password);
       const res = await apiRequest("PATCH", `/api/notes/${noteId}`, {
-        title: data.title,
         content: encryptedContent,
       });
       if (!res.ok) throw new Error("Errore durante l'aggiornamento");
@@ -110,32 +106,23 @@ export function NoteViewer({ noteId, onClose }: Props) {
   });
 
   const handleSave = () => {
-    if (!title.trim() || !content.trim()) {
+    if (!content.trim()) {
       toast({
         title: "Errore",
-        description: "Titolo e contenuto sono obbligatori",
+        description: "Il contenuto non può essere vuoto",
         variant: "destructive",
       });
       return;
     }
-    updateMutation.mutate({ title, content });
+    updateMutation.mutate(content);
   };
 
   if (!note || !user) return null;
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center mb-4">
-        {isEditing ? (
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="text-xl font-bold"
-          />
-        ) : (
-          <h2 className="text-xl font-bold">{note.title}</h2>
-        )}
-
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-xl font-bold">{note.title}</h2>
         <div className="flex gap-2">
           {isEditing ? (
             <>
@@ -143,10 +130,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
                 <Save className="h-4 w-4 mr-2" />
                 Salva
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => setIsEditing(false)}
-              >
+              <Button variant="outline" onClick={() => setIsEditing(false)}>
                 <X className="h-4 w-4 mr-2" />
                 Annulla
               </Button>
@@ -158,7 +142,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
                 Modifica
               </Button>
               <Button 
-                variant="destructive"
+                variant="destructive" 
                 onClick={() => setShowDeleteDialog(true)}
               >
                 <Trash2 className="h-4 w-4 mr-2" />
@@ -173,45 +157,33 @@ export function NoteViewer({ noteId, onClose }: Props) {
         <Textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          rows={10}
-          className="w-full min-h-[200px]"
+          className="w-full min-h-[300px] text-lg"
         />
       ) : (
-        <div className="whitespace-pre-wrap bg-zinc-800 rounded-lg p-4">
+        <div className="whitespace-pre-wrap text-lg bg-zinc-800 rounded-lg p-6">
           {content}
         </div>
       )}
 
       {note.attachments && note.attachments.length > 0 && (
-        <div className="space-y-4 mt-6">
-          <h3 className="text-lg font-semibold">Allegati</h3>
-          <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-4 mt-8">
+          <div className="grid grid-cols-2 gap-6">
             {note.attachments.map((attachment, index) => {
               try {
                 const decryptedData = decryptFile(attachment.data, user.password);
-
                 return (
-                  <div key={index} className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm text-zinc-400">
-                      {attachment.type === 'image' ? (
-                        <Image className="h-4 w-4" />
-                      ) : (
-                        <Film className="h-4 w-4" />
-                      )}
-                      <span>{attachment.fileName}</span>
-                    </div>
-
+                  <div key={index}>
                     {attachment.type === 'image' ? (
                       <img
                         src={`data:${attachment.mimeType};base64,${decryptedData}`}
                         alt={attachment.fileName}
-                        className="w-full h-48 object-cover rounded-lg border border-zinc-700"
+                        className="w-full rounded-lg border border-zinc-700"
                       />
                     ) : (
                       <video
                         src={`data:${attachment.mimeType};base64,${decryptedData}`}
                         controls
-                        className="w-full h-48 object-cover rounded-lg border border-zinc-700"
+                        className="w-full rounded-lg border border-zinc-700"
                       />
                     )}
                   </div>
