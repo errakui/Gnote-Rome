@@ -2,10 +2,18 @@ import express from "express";
 import { setupVite } from "./vite";
 import { setupAuth } from "./auth";
 import { registerRoutes } from "./routes";
+import cors from "cors";
 
 const app = express();
-app.use(express.json({ limit: '10mb' })); // Limite 10MB
-app.use(express.urlencoded({ extended: false, limit: '10mb' })); // Limite 10MB
+
+// Configurazione CORS
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' ? false : 'http://localhost:5000',
+  credentials: true
+}));
+
+app.use(express.json({ limit: '10mb' })); 
+app.use(express.urlencoded({ extended: false, limit: '10mb' })); 
 
 console.log("Inizializzazione del server...");
 

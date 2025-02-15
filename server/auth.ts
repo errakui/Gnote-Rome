@@ -38,7 +38,9 @@ export function setupAuth(app: Express) {
     cookie: {
       secure: false,
       maxAge: 24 * 60 * 60 * 1000,
-      httpOnly: true
+      httpOnly: true,
+      sameSite: 'lax',
+      path: '/'
     }
   };
 
@@ -80,16 +82,20 @@ export function setupAuth(app: Express) {
 
   passport.deserializeUser(async (id: number, done) => {
     try {
-      console.log("Deserializzazione utente:", id);
+      console.log("[Auth] Tentativo di deserializzazione utente con ID:", id);
       const user = await storage.getUser(id);
       if (!user) {
-        console.log("Utente non trovato durante la deserializzazione:", id);
+        console.log("[Auth] Deserializzazione fallita: utente non trovato con ID:", id);
         return done(null, false);
       }
-      console.log("Utente deserializzato con successo:", id);
+      console.log("[Auth] Utente deserializzato con successo:", {
+        id: user.id,
+        username: user.username,
+        hasPassword: !!user.password
+      });
       done(null, user);
     } catch (error) {
-      console.error("Errore durante la deserializzazione dell'utente:", error);
+      console.error("[Auth] Errore durante la deserializzazione:", error);
       done(error);
     }
   });
@@ -167,11 +173,16 @@ export function setupAuth(app: Express) {
   });
 
   app.get("/api/user", (req, res) => {
+    console.log("[Auth] Richiesta /api/user");
+    console.log("[Auth] isAuthenticated:", req.isAuthenticated());
+    console.log("[Auth] Session ID:", req.sessionID);
+    console.log("[Auth] User in session:", req.user);
+
     if (!req.isAuthenticated() || !req.user) {
-      console.log("Tentativo di accesso non autorizzato all'API /user");
+      console.log("[Auth] Accesso negato: utente non autenticato");
       return res.sendStatus(401);
     }
-    console.log("Dati utente inviati per:", req.user.username);
+    console.log("[Auth] Accesso consentito per:", req.user.username);
     res.json({ id: req.user.id, username: req.user.username });
   });
 }
