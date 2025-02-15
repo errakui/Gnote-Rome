@@ -1,17 +1,10 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Note } from "@shared/schema";
-import {
-  decryptText,
-  decryptFile,
-  encryptText,
-  encryptFile,
-} from "@/lib/crypto";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useAuth } from "@/hooks/use-auth";
 import {
   Trash2,
   Edit2,
@@ -39,14 +32,10 @@ interface Props {
 
 export function NoteViewer({ noteId, onClose }: Props) {
   const { toast } = useToast();
-  const { user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [editContent, setEditContent] = useState("");
   const [newAttachments, setNewAttachments] = useState<File[]>([]);
-  const [decryptedAttachments, setDecryptedAttachments] = useState<
-    { data: string; type: string; mimeType: string }[]
-  >([]);
 
   const { data: note, isLoading } = useQuery<Note>({
     queryKey: ["/api/notes", noteId],
@@ -55,62 +44,8 @@ export function NoteViewer({ noteId, onClose }: Props) {
         console.warn("Contenuto nota mancante");
         return;
       }
-
-      try {
-        console.log("Tentativo decrittazione nota:", {
-          contentLength: data.content.length,
-          
-        });
-
-        const decrypted = decryptText(data.content, user.password);
-        console.log("Risultato decrittazione:", {
-          success: !!decrypted,
-          decryptedLength: decrypted?.length
-        });
-
-        if (!decrypted) {
-          console.warn("Decrittazione fallita o contenuto vuoto");
-          return;
-        }
-
-        setEditContent(decrypted);
-
-        let decryptedAtts: { data: string; type: string; mimeType: string }[] =
-          [];
-        if (data.attachments && data.attachments.length > 0) {
-          decryptedAtts = data.attachments
-            .map((att) => {
-              if (!att.data) return null;
-              try {
-                return {
-                  data: decryptFile(att.data, user.password),
-                  type: att.type,
-                  mimeType: att.mimeType,
-                };
-              } catch (error) {
-                console.error("Errore decrittazione allegato:", error);
-                return null;
-              }
-            })
-            .filter(
-              (att): att is { data: string; type: string; mimeType: string } =>
-                att !== null,
-            );
-        }
-        setDecryptedAttachments(decryptedAtts);
-      } catch (error) {
-        console.error("Errore decrittazione nota:", error);
-        setEditContent("");
-        toast({
-          title: "Errore",
-          description: "Errore nella decrittazione. Controlla la password.",
-          variant: "destructive",
-        });
-      }
-    },
-    staleTime: 30000,
-    cacheTime: 60000,
-    retry: 2,
+      setEditContent(data.content);
+    }
   });
 
   const updateMutation = useMutation({
@@ -121,35 +56,23 @@ export function NoteViewer({ noteId, onClose }: Props) {
       content: string;
       files?: File[];
     }) => {
-      if (!user?.password) throw new Error("Utente non autenticato");
-
       let updatedAttachments = [...(note?.attachments || [])];
 
       if (files?.length) {
-        const newEncryptedAttachments = await Promise.all(
-          files.map(async (file) => {
-            try {
-              const encrypted = await encryptFile(file, user.password);
-              return {
-                type: file.type.startsWith("image/") ? "image" : "video",
-                data: encrypted.data,
-                fileName: file.name,
-                mimeType: file.type,
-              };
-            } catch (error) {
-              console.error("Errore crittografia file:", error);
-              throw new Error(`Errore nel processare il file ${file.name}`);
-            }
-          }),
+        const newAttachments = await Promise.all(
+          files.map(async (file) => ({
+            type: file.type.startsWith("image/") ? "image" : "video",
+            url: URL.createObjectURL(file),
+            fileName: file.name,
+            mimeType: file.type,
+            size: file.size
+          }))
         );
-        updatedAttachments = [
-          ...updatedAttachments,
-          ...newEncryptedAttachments,
-        ];
+        updatedAttachments = [...updatedAttachments, ...newAttachments];
       }
 
       const res = await apiRequest("PATCH", `/api/notes/${noteId}`, {
-        content: encryptText(content, user.password),
+        content,
         attachments: updatedAttachments,
       });
 
@@ -179,13 +102,13 @@ export function NoteViewer({ noteId, onClose }: Props) {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const maxSize = 5 * 1024 * 1024; // 5MB
 
     const validFiles = files.filter((file) => {
       if (file.size > maxSize) {
         toast({
           title: "File troppo grande",
-          description: `Il file ${file.name} supera il limite di 10MB`,
+          description: `Il file ${file.name} supera il limite di 5MB`,
           variant: "destructive",
         });
         return false;
@@ -231,7 +154,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
     },
   });
 
-  if (isLoading || !note || !user?.password) {
+  if (isLoading || !note) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -258,21 +181,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
                 variant="outline"
                 onClick={() => {
                   setIsEditing(false);
-                  if (note.content && user.password) {
-                    try {
-                      const decrypted = decryptText(
-                        note.content,
-                        user.password,
-                      );
-                      setEditContent(decrypted || "");
-                    } catch (error) {
-                      console.error(
-                        "Errore nel ripristino del contenuto:",
-                        error,
-                      );
-                      setEditContent("");
-                    }
-                  }
+                  setEditContent(note.content);
                   setNewAttachments([]);
                 }}
               >
@@ -345,7 +254,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
                     <button
                       onClick={() =>
                         setNewAttachments((prev) =>
-                          prev.filter((_, i) => i !== index),
+                          prev.filter((_, i) => i !== index)
                         )
                       }
                       className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1"
@@ -360,22 +269,22 @@ export function NoteViewer({ noteId, onClose }: Props) {
         ) : (
           <div className="space-y-6">
             <div className="whitespace-pre-wrap text-lg">
-              {editContent || "Nessun contenuto"}
+              {note.content || "Nessun contenuto"}
             </div>
 
-            {decryptedAttachments.length > 0 && (
+            {note.attachments && note.attachments.length > 0 && (
               <div className="grid grid-cols-2 gap-4">
-                {decryptedAttachments.map((attachment, index) => (
+                {note.attachments.map((attachment, index) => (
                   <div key={index}>
                     {attachment.type === "image" ? (
                       <img
-                        src={`data:${attachment.mimeType};base64,${attachment.data}`}
+                        src={attachment.url}
                         alt={`Allegato ${index + 1}`}
                         className="w-full rounded-lg"
                       />
                     ) : (
                       <video
-                        src={`data:${attachment.mimeType};base64,${attachment.data}`}
+                        src={attachment.url}
                         controls
                         className="w-full rounded-lg"
                       />
