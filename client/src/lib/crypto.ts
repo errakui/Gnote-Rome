@@ -1,8 +1,11 @@
 import CryptoJS from 'crypto-js';
 
 export function encryptText(text: string, key: string): string {
-  if (!text || !key) {
-    throw new Error("Testo e chiave sono richiesti per la crittografia");
+  if (!text) {
+    throw new Error("Il contenuto della nota non può essere vuoto");
+  }
+  if (!key) {
+    throw new Error("Devi essere loggato per criptare le note");
   }
   const keyString = CryptoJS.enc.Utf8.parse(key);
   return CryptoJS.AES.encrypt(text, keyString).toString();
