@@ -36,43 +36,47 @@ export function NoteViewer({ noteId, onClose }: Props) {
   const { data: note, isLoading } = useQuery<Note>({
     queryKey: ["/api/notes", noteId],
     onSuccess: (data) => {
-      if (data?.content && user?.password) {
-        try {
-          const decrypted = decryptText(data.content, user.password);
-          setEditContent(decrypted);
-
-          // Decripta gli allegati esistenti
-          if (data.attachments) {
-            const decrypted = data.attachments.map(att => {
-              if (!att.data) return null;
-              try {
-                return {
-                  data: decryptFile(att.data, user.password),
-                  type: att.type,
-                  mimeType: att.mimeType
-                };
-              } catch (error) {
-                console.error("Errore decrittazione allegato:", error);
-                toast({
-                  title: "Errore",
-                  description: `Errore nella decrittazione dell'allegato: ${error.message}`,
-                  variant: "destructive",
-                });
-                return null;
-              }
-            }).filter(Boolean);
-            setDecryptedAttachments(decrypted);
-          }
-        } catch (error) {
-          console.error("Errore decrittazione:", error);
-          toast({
-            title: "Errore",
-            description: `Errore nella decrittazione della nota: ${error.message}`,
-            variant: "destructive",
-          });
-        }
+      if (!data?.content || !user?.password) {
+        console.warn("Dati mancanti per la decrittazione:", { hasContent: !!data?.content, hasPassword: !!user?.password });
+        return;
       }
-    }
+
+      try {
+        const decrypted = decryptText(data.content, user.password);
+        setEditContent(decrypted);
+
+        if (data.attachments) {
+          const decryptedAtts = data.attachments.map(att => {
+            if (!att.data) return null;
+            try {
+              return {
+                data: decryptFile(att.data, user.password),
+                type: att.type,
+                mimeType: att.mimeType
+              };
+            } catch (error) {
+              console.error("Errore decrittazione allegato:", error);
+              toast({
+                title: "Errore",
+                description: "Errore nella decrittazione di un allegato",
+                variant: "destructive",
+              });
+              return null;
+            }
+          }).filter(Boolean);
+          setDecryptedAttachments(decryptedAtts);
+        }
+      } catch (error) {
+        console.error("Errore decrittazione nota:", error);
+        toast({
+          title: "Errore Decrittazione",
+          description: "Impossibile decrittare la nota. Prova a ricaricare la pagina.",
+          variant: "destructive",
+        });
+      }
+    },
+    retry: 1,
+    staleTime: 1000
   });
 
   const updateMutation = useMutation({
