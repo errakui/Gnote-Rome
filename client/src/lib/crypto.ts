@@ -20,18 +20,18 @@ export function encryptText(text: string, key: string): string {
 
 export function decryptText(ciphertext: string, key: string): string {
   if (!ciphertext || !key) {
-    console.warn("[Debug] Dati mancanti per decrittografia:", {
+    console.error("[Crypto] Dati mancanti per decrittografia:", {
       hasCiphertext: !!ciphertext,
-      hasKey: !!key
+      hasKey: !!key,
+      keyLength: key?.length
     });
-    return "";
+    throw new Error("Dati mancanti per la decrittografia");
   }
 
   try {
-    console.log("[Debug] Tentativo decrittografia:", { 
-      hasCiphertext: !!ciphertext, 
-      hasKey: !!key,
-      ciphertextLength: ciphertext?.length
+    console.log("[Crypto] Tentativo decrittografia:", { 
+      ciphertextLength: ciphertext.length, 
+      keyLength: key.length
     });
 
     const keyString = CryptoJS.enc.Utf8.parse(key);
