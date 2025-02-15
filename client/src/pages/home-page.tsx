@@ -19,6 +19,7 @@ import { LogOut, Plus, Loader2, Lock, Shield, Binary, Image, Video, X } from "lu
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
+import { NoteViewer } from "@/components/NoteViewer";
 
 type FormData = {
   title: string;
@@ -28,6 +29,8 @@ type FormData = {
 
 export default function HomePage() {
   const { user, logoutMutation } = useAuth();
+  const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
+  const [showNoteViewer, setShowNoteViewer] = useState(false);
   const [previewFiles, setPreviewFiles] = useState<{ file: File; preview: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -50,16 +53,12 @@ export default function HomePage() {
       content: string;
       attachments?: Attachment[];
     }) => {
-      console.log("Dati inviati al server:", data);
       const res = await apiRequest("POST", "/api/notes", data);
       if (!res.ok) {
         const errorText = await res.text();
-        console.error("Errore dal server:", errorText);
         throw new Error(errorText);
       }
-      const jsonResponse = await res.json();
-      console.log("Risposta dal server:", jsonResponse);
-      return jsonResponse;
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notes"] });
@@ -71,7 +70,6 @@ export default function HomePage() {
       });
     },
     onError: (error: Error) => {
-      console.error("Errore durante il salvataggio:", error);
       toast({
         title: "Errore",
         description: error instanceof Error ? error.message : "Errore nel salvataggio della nota",
@@ -82,8 +80,6 @@ export default function HomePage() {
 
   const onSubmit = async (formData: FormData) => {
     try {
-      console.log("Inizio salvataggio nota:", formData);
-
       if (!formData.title || !formData.content) {
         toast({
           title: "Errore",
@@ -93,17 +89,23 @@ export default function HomePage() {
         return;
       }
 
-      console.log("Criptaggio contenuto...");
-      const encryptedContent = encryptText(formData.content, user!.password);
+      if (!user) {
+        toast({
+          title: "Errore",
+          description: "Devi essere autenticato per creare una nota",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const encryptedContent = encryptText(formData.content, user.password);
 
       let attachments: Attachment[] = [];
       if (formData.attachments && formData.attachments.length > 0) {
-        console.log("Processamento allegati...");
         attachments = await Promise.all(
           formData.attachments.map(async (file: File) => {
             try {
-              console.log("Criptaggio file:", file.name);
-              const encryptedData = await encryptFile(file, user!.password);
+              const encryptedData = await encryptFile(file, user.password);
               return {
                 type: file.type.startsWith('image/') ? ('image' as const) : ('video' as const),
                 data: encryptedData.data,
@@ -118,14 +120,11 @@ export default function HomePage() {
         );
       }
 
-      console.log("Invio dati al server...");
       await createNoteMutation.mutateAsync({
         title: formData.title,
         content: encryptedContent,
         attachments: attachments.length > 0 ? attachments : undefined
       });
-
-      console.log("Salvataggio completato con successo");
 
     } catch (error) {
       console.error('Errore durante il salvataggio:', error);
@@ -330,44 +329,68 @@ export default function HomePage() {
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {notes.map((note) => (
-            <Card key={note.id} className="bg-zinc-900 border-zinc-800">
-              <CardHeader>
-                <CardTitle className="font-mono flex items-center space-x-2">
-                  <Lock className="h-4 w-4" />
-                  <span>{note.title}</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="whitespace-pre-wrap font-mono text-zinc-300 mb-4">
-                  {decryptText(note.content, user!.password)}
-                </p>
+            <Dialog
+              key={note.id}
+              open={showNoteViewer && selectedNoteId === note.id}
+              onOpenChange={(open) => {
+                setShowNoteViewer(open);
+                if (!open) setSelectedNoteId(null);
+              }}
+            >
+              <DialogTrigger asChild>
+                <Card 
+                  className="bg-zinc-900 border-zinc-800 cursor-pointer hover:bg-zinc-800 transition-colors"
+                  onClick={() => {
+                    setSelectedNoteId(note.id);
+                    setShowNoteViewer(true);
+                  }}
+                >
+                  <CardHeader>
+                    <CardTitle className="font-mono flex items-center space-x-2">
+                      <Lock className="h-4 w-4" />
+                      <span>{note.title}</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {user && (
+                      <>
+                        <p className="whitespace-pre-wrap font-mono text-zinc-300 mb-4 line-clamp-3">
+                          {decryptText(note.content, user.password)}
+                        </p>
 
-                {note.attachments && note.attachments.length > 0 && (
-                  <div className="grid grid-cols-2 gap-2">
-                    {note.attachments.map((attachment, index) => {
-                      const decryptedData = decryptFile(attachment.data, user!.password);
-                      const dataUrl = `data:${attachment.mimeType};base64,${decryptedData}`;
-
-                      return attachment.type === 'image' ? (
-                        <img
-                          key={index}
-                          src={dataUrl}
-                          alt={attachment.fileName}
-                          className="w-full h-24 object-cover rounded-lg"
-                        />
-                      ) : (
-                        <video
-                          key={index}
-                          src={dataUrl}
-                          controls
-                          className="w-full h-24 object-cover rounded-lg"
-                        />
-                      );
-                    })}
-                  </div>
+                        {note.attachments && note.attachments.length > 0 && (
+                          <div className="flex gap-2 text-sm text-zinc-400">
+                            {note.attachments.some(a => a.type === 'image') && (
+                              <div className="flex items-center gap-1">
+                                <Image className="h-4 w-4" />
+                                <span>{note.attachments.filter(a => a.type === 'image').length}</span>
+                              </div>
+                            )}
+                            {note.attachments.some(a => a.type === 'video') && (
+                              <div className="flex items-center gap-1">
+                                <Video className="h-4 w-4" />
+                                <span>{note.attachments.filter(a => a.type === 'video').length}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              </DialogTrigger>
+              <DialogContent className="bg-zinc-900 border-zinc-800 max-w-4xl">
+                {selectedNoteId === note.id && (
+                  <NoteViewer 
+                    noteId={note.id} 
+                    onClose={() => {
+                      setShowNoteViewer(false);
+                      setSelectedNoteId(null);
+                    }} 
+                  />
                 )}
-              </CardContent>
-            </Card>
+              </DialogContent>
+            </Dialog>
           ))}
           {notes.length === 0 && (
             <div className="col-span-full text-center py-12 text-zinc-500">
