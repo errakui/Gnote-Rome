@@ -10,37 +10,42 @@ if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL deve essere impostato");
 }
 
+// Configurazione più robusta del pool
 const poolConfig = {
   connectionString: process.env.DATABASE_URL,
-  max: 1,
-  idleTimeoutMillis: 120000,
-  connectionTimeoutMillis: 30000,
-  ssl: true
+  max: 1, // Limita a una singola connessione
+  idleTimeoutMillis: 60000, // 1 minuto timeout
+  connectionTimeoutMillis: 20000, // 20 secondi timeout
+  ssl: true,
+  keepAlive: true
 };
 
+// Crea il pool
 export const pool = new Pool(poolConfig);
 
-// Gestione errori del pool
+// Gestione errori
 pool.on('error', (err) => {
-  console.error('Errore del pool:', err);
+  console.error('Errore pool database:', err);
+  process.exit(1); // Termina in caso di errore critico
 });
 
 pool.on('connect', () => {
-  console.log('Connessione al database stabilita');
+  console.log('Nuova connessione al database stabilita');
 });
 
-// Test della connessione
-async function testConnection() {
+// Test iniziale della connessione
+async function initDatabase() {
   try {
     const client = await pool.connect();
-    console.log('Test connessione DB riuscito');
+    console.log('Test connessione database riuscito');
     client.release();
   } catch (err) {
-    console.error('Errore test connessione DB:', err);
+    console.error('Errore connessione database:', err);
     process.exit(1);
   }
 }
 
-testConnection();
+initDatabase();
 
+// Esporta il client drizzle
 export const db = drizzle({ client: pool, schema });
