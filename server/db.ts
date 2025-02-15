@@ -12,13 +12,13 @@ if (!process.env.DATABASE_URL) {
 }
 
 const poolConfig = {
-  connectionString: process.env.DATABASE_URL?.replace('.us-east-2', '-pooler.us-east-2'),
-  max: 10,
-  idleTimeoutMillis: 60000,
-  connectionTimeoutMillis: 5000,
-  ssl: {
-    rejectUnauthorized: false
-  }
+  connectionString: process.env.DATABASE_URL,
+  max: 5,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+  ssl: true,
+  keepAlive: true,
+  statement_timeout: 10000,
 };
 
 export const pool = new Pool(poolConfig);

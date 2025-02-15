@@ -25,8 +25,9 @@ export class DatabaseStorage implements IStorage {
       createTableIfMissing: true,
       tableName: 'session',
       schemaName: 'public',
-      ttl: 86400,
-      pruneSessionInterval: 60
+      ttl: 24 * 60 * 60,
+      pruneSessionInterval: 15 * 60,
+      errorLog: console.error
     });
   }
 
