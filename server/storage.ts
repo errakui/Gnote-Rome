@@ -5,6 +5,20 @@ import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
 
+const PostgresStore = connectPg(session);
+const sessionStore = new PostgresStore({
+  pool,
+  createTableIfMissing: true,
+  tableName: 'user_sessions',
+  pruneSessionInterval: 60
+});
+
+sessionStore.on('error', (error) => {
+  console.error('Errore SessionStore:', error);
+});
+
+export { sessionStore };
+
 const PostgresSessionStore = connectPg(session);
 
 export interface IStorage {
