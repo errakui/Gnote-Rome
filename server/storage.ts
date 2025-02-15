@@ -8,9 +8,8 @@ import { pool } from "./db";
 const PostgresStore = connectPg(session);
 const sessionStore = new PostgresStore({
   pool,
-  createTableIfMissing: true,
-  tableName: 'user_sessions',
-  pruneSessionInterval: 60
+  tableName: 'session',
+  createTableIfMissing: true
 });
 
 sessionStore.on('error', (error) => {
