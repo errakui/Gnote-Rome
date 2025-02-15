@@ -1,11 +1,19 @@
 import CryptoJS from 'crypto-js';
 
 export function encryptText(text: string, key: string): string {
-  return CryptoJS.AES.encrypt(text, key).toString();
+  if (!text || !key) {
+    throw new Error("Testo e chiave sono richiesti per la crittografia");
+  }
+  const keyString = CryptoJS.enc.Utf8.parse(key);
+  return CryptoJS.AES.encrypt(text, keyString).toString();
 }
 
 export function decryptText(ciphertext: string, key: string): string {
-  const bytes = CryptoJS.AES.decrypt(ciphertext, key);
+  if (!ciphertext || !key) {
+    throw new Error("Testo cifrato e chiave sono richiesti per la decrittografia");
+  }
+  const keyString = CryptoJS.enc.Utf8.parse(key);
+  const bytes = CryptoJS.AES.decrypt(ciphertext, keyString);
   return bytes.toString(CryptoJS.enc.Utf8);
 }
 
