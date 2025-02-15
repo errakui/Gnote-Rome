@@ -40,14 +40,28 @@ export function encryptFile(file: File, key: string): Promise<{
         const base64String = event.target.result.toString().split(',')[1];
         console.log("[Debug] Lunghezza base64:", base64String.length);
 
-        // Semplifichiamo il processo di crittografia
-        const encrypted = CryptoJS.AES.encrypt(base64String, key).toString();
-        console.log("[Debug] Crittografia completata, lunghezza:", encrypted.length);
+        // Converti la chiave in WordArray
+        const keyWordArray = CryptoJS.enc.Utf8.parse(key);
+        // Converti i dati in WordArray
+        const dataWordArray = CryptoJS.enc.Base64.parse(base64String);
+
+        // Crea un oggetto valido per la crittografia
+        const encrypted = CryptoJS.AES.encrypt(
+          dataWordArray, 
+          keyWordArray, 
+          {
+            mode: CryptoJS.mode.CBC,
+            padding: CryptoJS.pad.Pkcs7,
+            iv: CryptoJS.lib.WordArray.random(16)
+          }
+        );
+
+        console.log("[Debug] Crittografia completata, lunghezza:", encrypted.toString().length);
 
         const type = file.type.startsWith('image/') ? 'image' : 'video';
 
         resolve({
-          data: encrypted,
+          data: encrypted.toString(),
           fileName: file.name,
           mimeType: file.type,
           type
@@ -73,7 +87,15 @@ export function decryptFile(
 ): string {
   try {
     console.log("[Debug] Inizio decrittografia, lunghezza dati:", encryptedData.length);
-    const decrypted = CryptoJS.AES.decrypt(encryptedData, key);
+
+    // Converti la chiave in WordArray
+    const keyWordArray = CryptoJS.enc.Utf8.parse(key);
+
+    const decrypted = CryptoJS.AES.decrypt(encryptedData, keyWordArray, {
+      mode: CryptoJS.mode.CBC,
+      padding: CryptoJS.pad.Pkcs7
+    });
+
     console.log("[Debug] Decrittografia completata");
     return decrypted.toString(CryptoJS.enc.Base64);
   } catch (error) {
