@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Note } from "@shared/schema";
 import { decryptText, decryptFile, encryptText, encryptFile } from "@/lib/crypto";
@@ -35,6 +35,22 @@ export function NoteViewer({ noteId, onClose }: Props) {
   const { data: note, isLoading } = useQuery<Note>({
     queryKey: ["/api/notes", noteId],
   });
+
+  useEffect(() => {
+    if (note?.content && user?.password) {
+      try {
+        const decryptedContent = decryptText(note.content, user.password);
+        setEditContent(decryptedContent);
+      } catch (error) {
+        console.error("Errore decrittazione:", error);
+        toast({
+          title: "Errore",
+          description: "Impossibile decrittare la nota",
+          variant: "destructive",
+        });
+      }
+    }
+  }, [note, user, toast]);
 
   const updateMutation = useMutation({
     mutationFn: async ({ content, files }: { content: string; files?: File[] }) => {
@@ -128,23 +144,6 @@ export function NoteViewer({ noteId, onClose }: Props) {
     setAttachments(prev => [...prev, ...validFiles]);
   };
 
-  useEffect(() => {
-    if (note && user?.password) {
-      try {
-        const decryptedContent = decryptText(note.content, user.password);
-        setEditContent(decryptedContent);
-      } catch (error) {
-        console.error("Errore decrittazione:", error);
-        toast({
-          title: "Errore",
-          description: "Impossibile decrittare la nota",
-          variant: "destructive",
-        });
-      }
-    }
-  }, [note, user]);
-
-
   if (isLoading || !note || !user?.password) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -153,7 +152,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
     );
   }
 
-  const decryptedContent = decryptText(note.content, user.password);
+  const decryptedContent = note.content ? decryptText(note.content, user.password) : '';
 
   return (
     <div className="flex flex-col h-full">
