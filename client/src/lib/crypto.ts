@@ -20,7 +20,10 @@ export function encryptText(text: string, key: string): string {
 
 export function decryptText(ciphertext: string, key: string): string {
   if (!ciphertext || !key) {
-    console.warn("[Debug] Dati mancanti per decrittografia");
+    console.warn("[Debug] Dati mancanti per decrittografia:", {
+      hasCiphertext: !!ciphertext,
+      hasKey: !!key
+    });
     return "";
   }
 
@@ -30,27 +33,40 @@ export function decryptText(ciphertext: string, key: string): string {
       hasKey: !!key,
       ciphertextLength: ciphertext?.length
     });
-  const keyString = CryptoJS.enc.Utf8.parse(key);
-  const combined = CryptoJS.enc.Base64.parse(ciphertext);
-  const iv = CryptoJS.lib.WordArray.create(combined.words.slice(0, 4));
-  const encryptedText = CryptoJS.lib.WordArray.create(combined.words.slice(4));
 
-  const decrypted = CryptoJS.AES.decrypt(
-    { ciphertext: encryptedText },
-    keyString,
-    {
-      mode: CryptoJS.mode.CBC,
-      padding: CryptoJS.pad.Pkcs7,
-      iv: iv,
-    },
-  );
+    const keyString = CryptoJS.enc.Utf8.parse(key);
+    const combined = CryptoJS.enc.Base64.parse(ciphertext);
 
-  return decrypted.toString(CryptoJS.enc.Utf8);
-} catch (error) {
-      console.error("[Debug] Errore decrittografia:", error);
-      throw new Error("Errore durante la decrittografia del file");
+    if (combined.words.length < 4) {
+      console.warn("[Debug] Ciphertext troppo corto");
+      return "";
     }
+
+    const iv = CryptoJS.lib.WordArray.create(combined.words.slice(0, 4));
+    const encryptedText = CryptoJS.lib.WordArray.create(combined.words.slice(4));
+
+    const decrypted = CryptoJS.AES.decrypt(
+      { ciphertext: encryptedText },
+      keyString,
+      {
+        mode: CryptoJS.mode.CBC,
+        padding: CryptoJS.pad.Pkcs7,
+        iv: iv,
+      },
+    );
+
+    const result = decrypted.toString(CryptoJS.enc.Utf8);
+    if (!result) {
+      console.warn("[Debug] Decrittazione ha prodotto stringa vuota");
+      return "";
+    }
+
+    return result;
+  } catch (error) {
+    console.error("[Debug] Errore decrittografia:", error);
+    return "";
   }
+}
 
 export function encryptFile(
   file: File,
@@ -115,6 +131,12 @@ export function decryptFile(encryptedData: string, key: string): string {
   try {
     const keyWordArray = CryptoJS.enc.Utf8.parse(key);
     const combined = CryptoJS.enc.Base64.parse(encryptedData);
+
+    if (combined.words.length < 4) {
+      console.warn("[Debug] Dati cifrati non validi o troppo corti");
+      throw new Error("Dati cifrati non validi");
+    }
+
     const iv = CryptoJS.lib.WordArray.create(combined.words.slice(0, 4));
     const ciphertext = CryptoJS.lib.WordArray.create(combined.words.slice(4));
 
@@ -128,9 +150,15 @@ export function decryptFile(encryptedData: string, key: string): string {
       },
     );
 
-    return decrypted.toString(CryptoJS.enc.Base64);
+    const result = decrypted.toString(CryptoJS.enc.Base64);
+    if (!result) {
+      console.warn("[Debug] Decrittazione file ha prodotto dati vuoti");
+      throw new Error("Decrittazione ha prodotto dati vuoti");
+    }
+
+    return result;
   } catch (error) {
-    console.error("[Debug] Errore decrittografia:", error);
+    console.error("[Debug] Errore decrittazione file:", error);
     throw new Error("Errore durante la decrittografia del file");
   }
 }
