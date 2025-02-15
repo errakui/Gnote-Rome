@@ -15,7 +15,7 @@ import { type Note } from "@shared/schema";
 import { useForm } from "react-hook-form";
 import { encryptText } from "@/lib/crypto";
 import { Label } from "@/components/ui/label";
-import { LogOut, Plus, Loader2, Lock, Shield, Binary, Image, Video, X } from "lucide-react";
+import { LogOut, Plus, Loader2, Lock, Shield, Image, Video, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState } from 'react';
 import { useToast } from "@/hooks/use-toast";
@@ -24,7 +24,6 @@ import { NoteViewer } from "@/components/NoteViewer";
 type FormData = {
   title: string;
   content: string;
-  files: File[];
 };
 
 export default function HomePage() {
@@ -38,8 +37,7 @@ export default function HomePage() {
   const form = useForm<FormData>({
     defaultValues: {
       title: '',
-      content: '',
-      files: []
+      content: ''
     }
   });
 
@@ -48,11 +46,23 @@ export default function HomePage() {
   });
 
   const createNoteMutation = useMutation({
-    mutationFn: async (formData: FormData) => {
-      const res = await apiRequest("POST", "/api/notes", formData);
+    mutationFn: async (formData: FormData & { files?: File[] }) => {
+      if (!user?.password) throw new Error("Errore di autenticazione");
+
+      const submitData = new FormData();
+      submitData.append('title', formData.title);
+      submitData.append('content', encryptText(formData.content, user.password));
+
+      if (formData.files) {
+        formData.files.forEach(file => {
+          submitData.append('files', file);
+        });
+      }
+
+      const res = await apiRequest("POST", "/api/notes", submitData);
       if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(errorText);
+        const error = await res.text();
+        throw new Error(error);
       }
       return res.json();
     },
@@ -66,62 +76,14 @@ export default function HomePage() {
         description: "Nota salvata con successo",
       });
     },
-    onError: (error: Error) => {
+    onError: (error) => {
       toast({
         title: "Errore",
-        description: error.message || "Errore nel salvataggio della nota",
+        description: error instanceof Error ? error.message : "Errore sconosciuto",
         variant: "destructive",
       });
     },
   });
-
-  const onSubmit = async (data: FormData) => {
-    try {
-      const formValues = form.getValues();
-
-      if (!formValues.title || !formValues.content) {
-        toast({
-          title: "Errore",
-          description: "Titolo e contenuto sono obbligatori",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      if (!user?.password) {
-        toast({
-          title: "Errore",
-          description: "Errore di autenticazione",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      // Create FormData object
-      const formData = new FormData();
-
-      // Encrypt and add content
-      const encryptedContent = encryptText(formValues.content, user.password);
-      formData.append('title', formValues.title);
-      formData.append('content', encryptedContent);
-
-      // Add files if present
-      if (previewFiles.length > 0) {
-        previewFiles.forEach(({ file }) => {
-          formData.append('files', file);
-        });
-      }
-
-      await createNoteMutation.mutateAsync(formData);
-    } catch (error) {
-      console.error('Errore durante il salvataggio:', error);
-      toast({
-        title: "Errore",
-        description: error instanceof Error ? error.message : "Errore nel salvataggio della nota",
-        variant: "destructive"
-      });
-    }
-  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -145,8 +107,6 @@ export default function HomePage() {
     }));
 
     setPreviewFiles(prev => [...prev, ...newPreviews]);
-    const currentFiles = form.getValues('files') || [];
-    form.setValue('files', [...currentFiles, ...validFiles]);
   };
 
   const removeFile = (index: number) => {
@@ -154,13 +114,14 @@ export default function HomePage() {
       URL.revokeObjectURL(prev[index].preview);
       return prev.filter((_, i) => i !== index);
     });
-
-    const currentFiles = form.getValues('files') || [];
-    form.setValue(
-      'files',
-      currentFiles.filter((_, i) => i !== index)
-    );
   };
+
+  const onSubmit = form.handleSubmit((data) => {
+    createNoteMutation.mutate({
+      ...data,
+      files: previewFiles.map(pf => pf.file)
+    });
+  });
 
   if (isLoading) {
     return (
@@ -216,7 +177,7 @@ export default function HomePage() {
                 </Button>
               </div>
               <div className="flex-1 overflow-y-auto p-6">
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <form onSubmit={onSubmit} className="space-y-6">
                   <div className="space-y-2">
                     <Label htmlFor="title">Titolo</Label>
                     <Input
@@ -233,24 +194,24 @@ export default function HomePage() {
                       className="min-h-[200px] bg-zinc-800 border-zinc-700"
                     />
                   </div>
-                  <div>
-                    <input
-                      type="file"
-                      className="hidden"
-                      id="file-upload"
-                      multiple
-                      accept="image/*,video/*"
-                      onChange={handleFileChange}
-                    />
-                    <label htmlFor="file-upload" className="cursor-pointer">
-                      <div className="border-2 border-dashed border-zinc-700 rounded-lg p-6 text-center hover:border-zinc-500">
-                        <Plus className="mx-auto h-12 w-12 text-zinc-400" />
-                        <p className="mt-2 text-sm text-zinc-400">
-                          Aggiungi media (max 10MB per file)
-                        </p>
-                      </div>
-                    </label>
-                  </div>
+
+                  <input
+                    type="file"
+                    className="hidden"
+                    id="file-upload"
+                    multiple
+                    accept="image/*,video/*"
+                    onChange={handleFileChange}
+                  />
+                  <label htmlFor="file-upload" className="cursor-pointer block">
+                    <div className="border-2 border-dashed border-zinc-700 rounded-lg p-6 text-center hover:border-zinc-500">
+                      <Plus className="mx-auto h-12 w-12 text-zinc-400" />
+                      <p className="mt-2 text-sm text-zinc-400">
+                        Aggiungi media (max 10MB per file)
+                      </p>
+                    </div>
+                  </label>
+
                   {previewFiles.length > 0 && (
                     <div className="grid grid-cols-2 gap-4">
                       {previewFiles.map(({ file, preview }, index) => (
@@ -279,7 +240,15 @@ export default function HomePage() {
                       ))}
                     </div>
                   )}
-                  <Button type="submit" className="w-full">
+
+                  <Button 
+                    type="submit" 
+                    className="w-full"
+                    disabled={createNoteMutation.isPending}
+                  >
+                    {createNoteMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : null}
                     Salva Nota
                   </Button>
                 </form>
@@ -313,32 +282,28 @@ export default function HomePage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {user && (
-                      <>
-                        <p className="whitespace-pre-wrap font-mono text-zinc-300 mb-4 line-clamp-3">
-                          {note.content || 'Nessun contenuto'}
-                        </p>
-                        {note.attachments && note.attachments.length > 0 && (
-                          <div className="flex gap-2 text-sm text-zinc-400">
-                            {note.attachments.some(a => a.type === 'image') && (
-                              <div className="flex items-center gap-1">
-                                <Image className="h-4 w-4" />
-                                <span>
-                                  {note.attachments.filter(a => a.type === 'image').length}
-                                </span>
-                              </div>
-                            )}
-                            {note.attachments.some(a => a.type === 'video') && (
-                              <div className="flex items-center gap-1">
-                                <Video className="h-4 w-4" />
-                                <span>
-                                  {note.attachments.filter(a => a.type === 'video').length}
-                                </span>
-                              </div>
-                            )}
+                    <p className="whitespace-pre-wrap font-mono text-zinc-300 mb-4 line-clamp-3">
+                      {note.content || 'Nessun contenuto'}
+                    </p>
+                    {note.attachments && note.attachments.length > 0 && (
+                      <div className="flex gap-2 text-sm text-zinc-400">
+                        {note.attachments.some(a => a.type === 'image') && (
+                          <div className="flex items-center gap-1">
+                            <Image className="h-4 w-4" />
+                            <span>
+                              {note.attachments.filter(a => a.type === 'image').length}
+                            </span>
                           </div>
                         )}
-                      </>
+                        {note.attachments.some(a => a.type === 'video') && (
+                          <div className="flex items-center gap-1">
+                            <Video className="h-4 w-4" />
+                            <span>
+                              {note.attachments.filter(a => a.type === 'video').length}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </CardContent>
                 </Card>
@@ -356,12 +321,6 @@ export default function HomePage() {
               </DialogContent>
             </Dialog>
           ))}
-          {notes.length === 0 && (
-            <div className="col-span-full text-center py-12 text-zinc-500">
-              <Lock className="h-12 w-12 mx-auto mb-4" />
-              <p className="font-mono">NESSUNA NOTA TROVATA</p>
-            </div>
-          )}
         </div>
       </main>
     </div>
