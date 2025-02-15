@@ -34,7 +34,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
   const [newAttachments, setNewAttachments] = useState<File[]>([]);
   const [fileInputRef, setFileInputRef] = useState<HTMLInputElement | null>(null);
 
-  const { data: note } = useQuery<Note>({
+  const { data: note, isLoading } = useQuery<Note>({
     queryKey: ["/api/notes", noteId],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/notes/${noteId}`);
@@ -165,7 +165,13 @@ export function NoteViewer({ noteId, onClose }: Props) {
     setNewAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
-  if (!note || !user) return null;
+  if (!note || !user || isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col">
@@ -204,6 +210,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
           )}
         </div>
       </div>
+
       <div className="flex-1 overflow-y-auto p-6">
         {isEditing ? (
           <div className="space-y-6">
@@ -303,6 +310,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
           </div>
         )}
       </div>
+
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>

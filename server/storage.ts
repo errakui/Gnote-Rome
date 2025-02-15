@@ -95,8 +95,9 @@ export class DatabaseStorage implements IStorage {
         .where(eq(notes.id, noteId))
         .where(eq(notes.userId, userId));
 
-      console.log("[Storage] Nota eliminata:", result);
-      return true;
+      const deleted = result.rowCount === 1;
+      console.log("[Storage] Nota eliminata:", deleted);
+      return deleted;
     } catch (error) {
       console.error("[Storage] Errore durante l'eliminazione della nota:", error);
       return false;
