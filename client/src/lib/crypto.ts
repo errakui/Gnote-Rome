@@ -20,26 +20,43 @@ export function decryptText(ciphertext: string, key: string): string {
   return bytes.toString(CryptoJS.enc.Utf8);
 }
 
-export async function encryptFile(file: File, key: string): Promise<{ 
+export function encryptFile(file: File, key: string): Promise<{ 
   data: string; 
   fileName: string;
   mimeType: string;
   type: "image" | "video";
 }> {
-  const buffer = await file.arrayBuffer();
-  const base64String = btoa(
-    new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-  );
-  const encrypted = CryptoJS.AES.encrypt(base64String, key).toString();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
 
-  const type = file.type.startsWith('image/') ? 'image' : 'video';
+    reader.onload = (event) => {
+      try {
+        if (!event.target?.result) {
+          throw new Error("Errore nella lettura del file");
+        }
 
-  return {
-    data: encrypted,
-    fileName: file.name,
-    mimeType: file.type,
-    type
-  };
+        const base64String = event.target.result.toString().split(',')[1];
+        const encrypted = CryptoJS.AES.encrypt(base64String, key).toString();
+
+        const type = file.type.startsWith('image/') ? 'image' : 'video';
+
+        resolve({
+          data: encrypted,
+          fileName: file.name,
+          mimeType: file.type,
+          type
+        });
+      } catch (error) {
+        reject(error);
+      }
+    };
+
+    reader.onerror = () => {
+      reject(new Error("Errore nella lettura del file"));
+    };
+
+    reader.readAsDataURL(file);
+  });
 }
 
 export function decryptFile(
