@@ -28,5 +28,5 @@ httpServer.listen(port, "0.0.0.0", () => {
   console.log(`Server in esecuzione sulla porta ${port}`);
   console.log("Database URL configurato:", !!process.env.DATABASE_URL);
   console.log("Session Secret configurato:", !!process.env.SESSION_SECRET);
-  console.log("Limite dimensione payload:", app.get('json limit'));
+  console.log("Limite dimensione payload:", app.get('json parser'));
 });

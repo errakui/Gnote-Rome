@@ -24,9 +24,10 @@ pool.on('error', (err) => {
   console.error('Errore database:', err);
 });
 
-// Gestione errori basilare
+// Gestione errori avanzata
 pool.on('error', (err) => {
-  console.error('Errore database:', err);
+  console.error('Errore critico database:', err);
+  process.exit(1); // Exit on critical DB errors
 });
 
 // Esporta il client drizzle
