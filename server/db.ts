@@ -13,12 +13,7 @@ if (!process.env.DATABASE_URL) {
 const pool = new Pool({ 
   connectionString: process.env.DATABASE_URL,
   max: 1,
-  connectionTimeoutMillis: 30000,
-  ssl: true,
-  idleTimeoutMillis: 0,
-  allowExitOnIdle: true,
-  retryDelay: 1000,
-  maxRetries: 3
+  ssl: true
 });
 
 pool.on('connect', () => {
