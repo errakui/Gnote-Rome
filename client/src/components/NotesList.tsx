@@ -8,7 +8,7 @@ import {
   DialogContent,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Loader2 } from "lucide-react";
+import { Loader2, FileText, Image as ImageIcon, Film } from "lucide-react";
 
 export function NotesList() {
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
@@ -50,22 +50,42 @@ export function NotesList() {
             <DialogTrigger asChild>
               <Button
                 variant="outline"
-                className="w-full justify-start h-auto p-4"
+                className="w-full justify-start h-auto p-4 hover:bg-accent"
                 onClick={() => {
                   setSelectedNoteId(note.id);
                   setDialogOpen(true);
                 }}
               >
-                <div>
-                  <div className="font-bold">{note.title}</div>
-                  <div className="text-sm text-muted-foreground">
-                    {new Date(note.createdAt).toLocaleDateString()}
-                  </div>
-                  {note.attachments && note.attachments.length > 0 && (
-                    <div className="text-xs text-muted-foreground mt-1">
-                      {note.attachments.length} allegati
+                <div className="flex items-start gap-3 w-full">
+                  <FileText className="h-5 w-5 mt-1 flex-shrink-0" />
+                  <div className="flex-grow text-left">
+                    <div className="font-bold">{note.title}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {new Date(note.createdAt).toLocaleDateString('it-IT', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
                     </div>
-                  )}
+                    {note.attachments && note.attachments.length > 0 && (
+                      <div className="flex items-center gap-2 mt-2">
+                        {note.attachments.some(a => a.type === 'image') && (
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <ImageIcon className="h-3 w-3" />
+                            {note.attachments.filter(a => a.type === 'image').length}
+                          </div>
+                        )}
+                        {note.attachments.some(a => a.type === 'video') && (
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Film className="h-3 w-3" />
+                            {note.attachments.filter(a => a.type === 'video').length}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </Button>
             </DialogTrigger>

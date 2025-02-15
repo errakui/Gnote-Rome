@@ -26,6 +26,7 @@ export interface IStorage {
   getNote(noteId: number, userId: number): Promise<Note | undefined>;
   createNote(userId: number, note: InsertNote): Promise<Note>;
   updateNote(noteId: number, userId: number, note: Partial<InsertNote>): Promise<Note | undefined>;
+  deleteNote(noteId: number, userId: number): Promise<boolean>;
   sessionStore: session.Store;
 }
 
@@ -85,6 +86,21 @@ export class DatabaseStorage implements IStorage {
       .where(eq(notes.userId, userId))
       .returning();
     return updated;
+  }
+
+  async deleteNote(noteId: number, userId: number): Promise<boolean> {
+    console.log("[Storage] Eliminazione nota ID:", noteId, "per utente ID:", userId);
+    try {
+      const result = await db.delete(notes)
+        .where(eq(notes.id, noteId))
+        .where(eq(notes.userId, userId));
+
+      console.log("[Storage] Nota eliminata:", result);
+      return true;
+    } catch (error) {
+      console.error("[Storage] Errore durante l'eliminazione della nota:", error);
+      return false;
+    }
   }
 
   async createNote(userId: number, insertNote: InsertNote): Promise<Note> {

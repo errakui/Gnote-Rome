@@ -136,6 +136,37 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  app.delete("/api/notes/:id", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user?.id) {
+      console.log("Tentativo di eliminazione non autorizzato della nota");
+      return res.sendStatus(401);
+    }
+
+    const noteId = parseInt(req.params.id);
+    if (isNaN(noteId)) {
+      return res.status(400).json({ error: "ID nota non valido" });
+    }
+
+    try {
+      console.log(`[DELETE /api/notes/:id] Eliminazione nota ID: ${noteId}`);
+      const success = await storage.deleteNote(noteId, req.user.id);
+
+      if (!success) {
+        console.log(`[DELETE /api/notes/:id] Nota non trovata: ${noteId}`);
+        return res.status(404).json({ error: "Nota non trovata" });
+      }
+
+      console.log(`[DELETE /api/notes/:id] Nota eliminata con successo: ${noteId}`);
+      res.sendStatus(200);
+    } catch (error) {
+      console.error("[DELETE /api/notes/:id] Errore nell'eliminazione della nota:", error);
+      res.status(500).json({
+        error: "Errore nell'eliminazione della nota",
+        details: error instanceof Error ? error.message : "Errore sconosciuto"
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
