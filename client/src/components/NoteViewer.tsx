@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
-import { Trash2, Edit, X, Save, Image, Film } from "lucide-react";
+import { Trash2, Edit2, X, Save, Image, Film } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,12 +34,13 @@ export function NoteViewer({ noteId, onClose }: Props) {
   const [content, setContent] = useState("");
 
   const { data: note, isLoading } = useQuery<Note>({
-    queryKey: [`/api/notes/${noteId}`],
+    queryKey: ["/api/notes", noteId],
+    queryFn: () => apiRequest("GET", `/api/notes/${noteId}`).then(r => r.json()),
     onSuccess: (note) => {
-      if (!isEditing) {
+      if (!isEditing && user) {
         try {
           setTitle(note.title);
-          const decrypted = decryptText(note.content, user!.password);
+          const decrypted = decryptText(note.content, user.password);
           setContent(decrypted);
         } catch (error) {
           console.error("Failed to decrypt note:", error);
@@ -50,7 +51,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
           });
         }
       }
-    }
+    },
   });
 
   const updateMutation = useMutation({
@@ -62,7 +63,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/notes/${noteId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notes", noteId] });
       queryClient.invalidateQueries({ queryKey: ["/api/notes"] });
       setIsEditing(false);
       toast({
@@ -122,33 +123,32 @@ export function NoteViewer({ noteId, onClose }: Props) {
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     setShowDeleteDialog(true);
   };
 
   if (isLoading) {
-    return <div>Caricamento...</div>;
+    return <div className="p-4 text-center">Caricamento...</div>;
   }
 
   if (!note) {
-    return <div>Nota non trovata</div>;
+    return <div className="p-4 text-center">Nota non trovata</div>;
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6 p-4">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">
-          {isEditing ? (
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Titolo"
-              className="text-2xl font-bold"
-            />
-          ) : (
-            note.title
-          )}
-        </h2>
+        {isEditing ? (
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Titolo"
+            className="text-xl font-bold flex-1 mr-4"
+          />
+        ) : (
+          <h2 className="text-xl font-bold">{note.title}</h2>
+        )}
+
         <div className="flex gap-2">
           {isEditing ? (
             <>
@@ -167,8 +167,8 @@ export function NoteViewer({ noteId, onClose }: Props) {
             </>
           ) : (
             <>
-              <Button onClick={() => setIsEditing(true)}>
-                <Edit className="h-4 w-4 mr-2" />
+              <Button onClick={() => setIsEditing(true)} variant="outline">
+                <Edit2 className="h-4 w-4 mr-2" />
                 Modifica
               </Button>
               <Button variant="destructive" onClick={handleDelete}>
@@ -186,53 +186,64 @@ export function NoteViewer({ noteId, onClose }: Props) {
           onChange={(e) => setContent(e.target.value)}
           placeholder="Contenuto"
           rows={10}
+          className="w-full"
         />
       ) : (
-        <div className="whitespace-pre-wrap">{content}</div>
+        <div className="whitespace-pre-wrap bg-black/20 rounded-lg p-4">
+          {content}
+        </div>
       )}
 
-      {note.attachments?.map((attachment, index) => {
-        try {
-          const decryptedData = decryptFile(
-            attachment.data,
-            user!.password
-          );
+      {note.attachments && note.attachments.length > 0 && (
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold">Allegati</h3>
+          <div className="grid grid-cols-2 gap-4">
+            {note.attachments.map((attachment, index) => {
+              try {
+                if (!user) throw new Error("Utente non autenticato");
 
-          return (
-            <div key={index} className="mt-4">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                {attachment.type === 'image' ? (
-                  <Image className="h-4 w-4" />
-                ) : (
-                  <Film className="h-4 w-4" />
-                )}
-                {attachment.fileName}
-              </div>
+                const decryptedData = decryptFile(
+                  attachment.data,
+                  user.password
+                );
 
-              {attachment.type === 'image' ? (
-                <img
-                  src={`data:${attachment.mimeType};base64,${decryptedData}`}
-                  alt={attachment.fileName}
-                  className="max-w-full h-auto rounded-lg shadow-lg"
-                />
-              ) : (
-                <video
-                  src={`data:${attachment.mimeType};base64,${decryptedData}`}
-                  controls
-                  className="max-w-full rounded-lg shadow-lg"
-                />
-              )}
-            </div>
-          );
-        } catch (error) {
-          console.error("Failed to decrypt attachment:", error);
-          return (
-            <div key={index} className="text-red-500">
-              Errore nel caricamento del media
-            </div>
-          );
-        }
-      })}
+                return (
+                  <div key={index} className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      {attachment.type === 'image' ? (
+                        <Image className="h-4 w-4" />
+                      ) : (
+                        <Film className="h-4 w-4" />
+                      )}
+                      {attachment.fileName}
+                    </div>
+                    {attachment.type === 'image' ? (
+                      <img
+                        src={`data:${attachment.mimeType};base64,${decryptedData}`}
+                        alt={attachment.fileName}
+                        className="w-full h-48 object-cover rounded-lg"
+                      />
+                    ) : (
+                      <video
+                        src={`data:${attachment.mimeType};base64,${decryptedData}`}
+                        controls
+                        className="w-full h-48 object-cover rounded-lg"
+                      />
+                    )}
+                  </div>
+                );
+              } catch (error) {
+                console.error("Failed to decrypt attachment:", error);
+                return (
+                  <div key={index} className="text-red-500 p-4 border border-red-500 rounded-lg">
+                    Errore nel caricamento del media
+                  </div>
+                );
+              }
+            })}
+          </div>
+        </div>
+      )}
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
