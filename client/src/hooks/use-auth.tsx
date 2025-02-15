@@ -25,15 +25,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   } = useQuery<SelectUser | null>({
     queryKey: ["user"],
     queryFn: async () => {
-      const res = await fetch("/api/user", {
-        credentials: "include"
-      });
-      if (!res.ok) {
-        if (res.status === 401) return null;
-        throw new Error(await res.text());
+      try {
+        const res = await fetch("/api/user", {
+          credentials: "include",
+          headers: {
+            'Cache-Control': 'no-cache',
+          }
+        });
+        
+        if (!res.ok) {
+          if (res.status === 401) {
+            queryClient.setQueryData(["user"], null);
+            return null;
+          }
+          throw new Error(await res.text());
+        }
+        
+        const data = await res.json();
+        if (!data || !data.id) {
+          queryClient.setQueryData(["user"], null);
+          return null;
+        }
+        
+        return data;
+      } catch (error) {
+        queryClient.setQueryData(["user"], null);
+        throw error;
       }
-      return res.json();
     },
+    refetchInterval: 5 * 60 * 1000, // Refresh ogni 5 minuti
+    staleTime: 4 * 60 * 1000, // Considera i dati obsoleti dopo 4 minuti
     refetchInterval: 0,
     refetchOnWindowFocus: true,
     retry: 1

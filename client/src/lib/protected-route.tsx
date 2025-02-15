@@ -25,10 +25,11 @@ export function ProtectedRoute({
     );
   }
 
-  if (!user) {
+  if (!user || !user.id) {
+    queryClient.setQueryData(["user"], null);
     return (
       <Route path={path}>
-        <Redirect to="/auth" />
+        <Redirect to="/auth?redirect=${encodeURIComponent(path)}" />
       </Route>
     );
   }
