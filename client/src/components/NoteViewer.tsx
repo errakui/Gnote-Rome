@@ -19,15 +19,18 @@ export function NoteViewer({ noteId, onClose }: Props) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
 
-  // Recupera la nota
-  const { data: note, isLoading } = useQuery<Note>({
+  const { data: note } = useQuery<Note>({
     queryKey: [`/api/notes/${noteId}`],
+    enabled: !!noteId,
     onSuccess: (note) => {
       if (!isEditing) {
         try {
           setTitle(note.title);
-          setContent(decryptText(note.content, note.userId.toString()));
+          const decrypted = decryptText(note.content, note.userId.toString());
+          setContent(decrypted);
+          console.log("Note decrypted successfully");
         } catch (error) {
+          console.error("Failed to decrypt note:", error);
           toast({
             title: "Errore",
             description: "Impossibile decrittare la nota",
@@ -38,11 +41,10 @@ export function NoteViewer({ noteId, onClose }: Props) {
     },
   });
 
-  // Mutation per aggiornare la nota
   const updateMutation = useMutation({
     mutationFn: async (data: Partial<Note>) => {
-      const res = await apiRequest("PATCH", `/api/notes/${noteId}`, data);
-      return res.json();
+      const response = await apiRequest("PATCH", `/api/notes/${noteId}`, data);
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/notes/${noteId}`] });
@@ -50,7 +52,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
       setIsEditing(false);
       toast({
         title: "Successo",
-        description: "Nota aggiornata correttamente",
+        description: "Nota aggiornata",
       });
     },
     onError: (error: Error) => {
@@ -62,27 +64,24 @@ export function NoteViewer({ noteId, onClose }: Props) {
     },
   });
 
-  // Gestisce il salvataggio delle modifiche
   const handleSave = async () => {
     if (!note) return;
+
     try {
-      const encryptedContent = encryptText(content, note.userId.toString());
+      const encrypted = encryptText(content, note.userId.toString());
       await updateMutation.mutateAsync({
         title,
-        content: encryptedContent,
+        content: encrypted,
       });
     } catch (error) {
+      console.error("Failed to save note:", error);
       toast({
         title: "Errore",
-        description: "Errore durante il salvataggio della nota",
+        description: "Errore durante il salvataggio",
         variant: "destructive",
       });
     }
   };
-
-  if (isLoading) {
-    return <div>Caricamento...</div>;
-  }
 
   if (!note) {
     return <div>Nota non trovata</div>;
@@ -120,20 +119,36 @@ export function NoteViewer({ noteId, onClose }: Props) {
         <>
           <h2 className="text-2xl font-bold">{note.title}</h2>
           <div className="whitespace-pre-wrap">{content}</div>
-          {note.attachments?.map((attachment, index) => (
-            <div key={index} className="mt-4">
-              {attachment.type === "image" && (
-                <img
-                  src={`data:${attachment.mimeType};base64,${decryptFile(
-                    attachment.data,
-                    note.userId.toString()
-                  )}`}
-                  alt={attachment.fileName}
-                  className="max-w-full h-auto"
-                />
-              )}
-            </div>
-          ))}
+          {note.attachments?.map((attachment, index) => {
+            if (attachment.type === "image") {
+              try {
+                const decryptedData = decryptFile(
+                  attachment.data,
+                  note.userId.toString()
+                );
+                return (
+                  <div key={index} className="mt-4">
+                    <img
+                      src={`data:${attachment.mimeType};base64,${decryptedData}`}
+                      alt={attachment.fileName}
+                      className="max-w-full h-auto rounded-lg shadow-lg"
+                    />
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {attachment.fileName}
+                    </p>
+                  </div>
+                );
+              } catch (error) {
+                console.error("Failed to decrypt attachment:", error);
+                return (
+                  <div key={index} className="text-red-500">
+                    Errore nel caricamento dell'immagine
+                  </div>
+                );
+              }
+            }
+            return null;
+          })}
           <div className="flex gap-2 mt-4">
             <Button onClick={() => setIsEditing(true)}>Modifica</Button>
             <Button variant="outline" onClick={onClose}>
