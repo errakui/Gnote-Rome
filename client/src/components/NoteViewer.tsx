@@ -130,9 +130,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
     );
   }
 
-  const decryptedContent = note.content && user?.password ? 
-    decryptText(note.content, user.password) : 
-    'Errore nella decrittazione';
+  const decryptedContent = note.content ? decryptText(note.content) : 'Errore nella decrittazione';
 
   return (
     <div className="flex flex-col h-full bg-black text-white">

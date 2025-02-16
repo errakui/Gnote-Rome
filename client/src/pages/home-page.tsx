@@ -63,7 +63,7 @@ export default function HomePage() {
       }
 
       formData.append('title', trimmedTitle);
-      formData.append('content', encryptText(trimmedContent, user.password));
+      formData.append('content', encryptText(trimmedContent));
 
       // Add files if present
       if (previewFiles.length > 0) {
