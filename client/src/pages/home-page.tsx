@@ -12,7 +12,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { type Note } from "@shared/schema";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { encryptText } from "@/lib/crypto";
+import { encryptFile, encryptText } from "@/lib/crypto";
 import { Label } from "@/components/ui/label";
 import { LogOut, Plus, Loader2, Lock, Shield, Image, Video, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,10 +50,14 @@ export default function HomePage() {
   });
 
   const createNoteMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: { title: string; content: string; attachments: any[] }) => {
       if (!user?.id) throw new Error("Errore di autenticazione");
 
-      console.log("Data being sent:", data);
+      console.log("Submitting note data:", {
+        title: data.title,
+        contentLength: data.content.length,
+        attachmentsCount: data.attachments.length
+      });
 
       const res = await apiRequest("POST", "/api/notes", data);
       if (!res.ok) {
@@ -112,9 +116,9 @@ export default function HomePage() {
     });
   };
 
-  const onSubmit = form.handleSubmit((data) => {
-    const trimmedTitle = data.title.trim();
-    const trimmedContent = data.content.trim();
+  const onSubmit = async (data: FormData) => {
+    const trimmedTitle = form.getValues("title").trim();
+    const trimmedContent = form.getValues("content").trim();
 
     if (!trimmedTitle || !trimmedContent) {
       toast({
@@ -125,28 +129,36 @@ export default function HomePage() {
       return;
     }
 
-    console.log("Submitting form with data:", { title: trimmedTitle, content: trimmedContent });
+    try {
+      // Convert files to base64
+      const attachmentPromises = previewFiles.map(async ({ file }) => {
+        const fileData = await encryptFile(file);
+        return {
+          type: fileData.type,
+          url: fileData.data,
+          fileName: fileData.fileName,
+          mimeType: fileData.mimeType,
+          size: file.size
+        };
+      });
 
-    // Create a plain object instead of FormData
-    const noteData = {
-      title: trimmedTitle,
-      content: trimmedContent,
-      attachments: []
-    };
+      const attachments = await Promise.all(attachmentPromises);
 
-    // Add attachments if present
-    if (previewFiles.length > 0) {
-      noteData.attachments = previewFiles.map(({ file }) => ({
-        type: file.type.startsWith("image/") ? "image" : "video",
-        url: URL.createObjectURL(file),
-        fileName: file.name,
-        mimeType: file.type,
-        size: file.size
-      }));
+      const noteData = {
+        title: trimmedTitle,
+        content: trimmedContent,
+        attachments
+      };
+
+      createNoteMutation.mutate(noteData);
+    } catch (error) {
+      toast({
+        title: "Errore",
+        description: "Errore nel processamento dei file",
+        variant: "destructive",
+      });
     }
-
-    createNoteMutation.mutate(noteData);
-  });
+  };
 
   if (isLoading) {
     return (
@@ -202,7 +214,7 @@ export default function HomePage() {
                 </Button>
               </div>
               <div className="flex-1 overflow-y-auto p-6">
-                <form onSubmit={onSubmit} className="space-y-6">
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                   <div className="space-y-2">
                     <Label htmlFor="title">Titolo</Label>
                     <Input
