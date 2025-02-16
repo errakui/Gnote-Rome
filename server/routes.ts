@@ -111,20 +111,26 @@ export function registerRoutes(app: Express): Server {
         return res.sendStatus(401);
       }
 
-      console.log("[POST /api/notes] Richiesta ricevuta:", {
-        userId: req.user.id,
-        title: req.body.title,
-        contentLength: req.body.content?.length || 0,
-        attachmentsCount: req.body.attachments?.length || 0
-      });
+      // Debug logs
+      console.log("[POST /api/notes] Corpo richiesta ricevuto:", req.body);
 
-      if (!req.body.title || !req.body.content) {
-        console.error("[POST /api/notes] Validazione fallita: titolo o contenuto mancante");
+      const { title, content } = req.body;
+
+      if (!title?.trim() || !content?.trim()) {
+        console.error("[POST /api/notes] Validazione fallita: titolo o contenuto mancante", {
+          title: title?.trim(),
+          contentLength: content?.trim()?.length
+        });
         return res.status(400).json({ error: "Titolo e contenuto sono obbligatori" });
       }
 
       console.log("[POST /api/notes] Inizio creazione nota nel database");
-      const note = await storage.createNote(req.user.id, req.body);
+      const note = await storage.createNote(req.user.id, {
+        title: title.trim(),
+        content: content.trim(),
+        attachments: req.body.attachments || []
+      });
+
       console.log(`[POST /api/notes] Nota creata con successo, ID: ${note.id}`);
       res.status(201).json(note);
     } catch (error) {

@@ -50,11 +50,15 @@ export default function HomePage() {
 
   const createNoteMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      if (!user?.password) throw new Error("Errore di autenticazione");
+      if (!user?.id) throw new Error("Errore di autenticazione");
+
+      // Add debug logs
+      console.log("Form data being sent:", {
+        title: data.title,
+        content: data.content
+      });
 
       const formData = new FormData();
-
-      // Ensure title and content are not empty after trimming
       const trimmedTitle = data.title.trim();
       const trimmedContent = data.content.trim();
 
@@ -62,6 +66,7 @@ export default function HomePage() {
         throw new Error("Titolo e contenuto sono obbligatori");
       }
 
+      // Ensure we're sending the correct data
       formData.append('title', trimmedTitle);
       formData.append('content', encryptText(trimmedContent));
 
@@ -70,6 +75,12 @@ export default function HomePage() {
         previewFiles.forEach(({ file }) => {
           formData.append('files', file);
         });
+      }
+
+      // Log the FormData content for debugging
+      console.log("FormData entries:");
+      for (let [key, value] of formData.entries()) {
+        console.log(key, value);
       }
 
       const res = await apiRequest("POST", "/api/notes", formData);
@@ -98,37 +109,6 @@ export default function HomePage() {
     },
   });
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    const maxSize = 10 * 1024 * 1024; // 10MB
-
-    const validFiles = files.filter(file => {
-      if (file.size > maxSize) {
-        toast({
-          title: "File troppo grande",
-          description: `Il file ${file.name} supera il limite di 10MB`,
-          variant: "destructive"
-        });
-        return false;
-      }
-      return file.type.startsWith('image/') || file.type.startsWith('video/');
-    });
-
-    const newPreviews = validFiles.map(file => ({
-      file,
-      preview: URL.createObjectURL(file)
-    }));
-
-    setPreviewFiles(prev => [...prev, ...newPreviews]);
-  };
-
-  const removeFile = (index: number) => {
-    setPreviewFiles(prev => {
-      URL.revokeObjectURL(prev[index].preview);
-      return prev.filter((_, i) => i !== index);
-    });
-  };
-
   const onSubmit = form.handleSubmit((data) => {
     const trimmedTitle = data.title.trim();
     const trimmedContent = data.content.trim();
@@ -142,7 +122,8 @@ export default function HomePage() {
       return;
     }
 
-    createNoteMutation.mutate(data);
+    console.log("Submitting form with data:", { title: trimmedTitle, content: trimmedContent });
+    createNoteMutation.mutate(data as any);
   });
 
   if (isLoading) {
@@ -269,8 +250,8 @@ export default function HomePage() {
                     </div>
                   )}
 
-                  <Button 
-                    type="submit" 
+                  <Button
+                    type="submit"
                     className="w-full"
                     disabled={createNoteMutation.isPending}
                   >
