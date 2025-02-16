@@ -20,6 +20,7 @@ import { useState } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { NoteViewer } from "@/components/NoteViewer";
 import { z } from "zod";
+import React from 'react';
 
 const formSchema = z.object({
   title: z.string().min(1, "Il titolo è obbligatorio").trim(),
@@ -52,38 +53,18 @@ export default function HomePage() {
     mutationFn: async (data: FormData) => {
       if (!user?.id) throw new Error("Errore di autenticazione");
 
-      // Add debug logs
       console.log("Form data being sent:", {
-        title: data.title,
-        content: data.content
+        title: data.get('title'),
+        content: data.get('content')
       });
 
-      const formData = new FormData();
-      const trimmedTitle = data.title.trim();
-      const trimmedContent = data.content.trim();
 
-      if (!trimmedTitle || !trimmedContent) {
-        throw new Error("Titolo e contenuto sono obbligatori");
-      }
-
-      // Ensure we're sending the correct data
-      formData.append('title', trimmedTitle);
-      formData.append('content', encryptText(trimmedContent));
-
-      // Add files if present
-      if (previewFiles.length > 0) {
-        previewFiles.forEach(({ file }) => {
-          formData.append('files', file);
-        });
-      }
-
-      // Log the FormData content for debugging
       console.log("FormData entries:");
-      for (let [key, value] of formData.entries()) {
+      for (let [key, value] of data.entries()) {
         console.log(key, value);
       }
 
-      const res = await apiRequest("POST", "/api/notes", formData);
+      const res = await apiRequest("POST", "/api/notes", data);
       if (!res.ok) {
         const error = await res.json();
         throw new Error(error.error || "Errore sconosciuto");
@@ -109,6 +90,37 @@ export default function HomePage() {
     },
   });
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const maxSize = 5 * 1024 * 1024; // 5MB
+
+    const validFiles = files.filter((file) => {
+      if (file.size > maxSize) {
+        toast({
+          title: "File troppo grande",
+          description: `Il file ${file.name} supera il limite di 5MB`,
+          variant: "destructive",
+        });
+        return false;
+      }
+      return file.type.startsWith("image/") || file.type.startsWith("video/");
+    });
+
+    const newPreviews = validFiles.map(file => ({
+      file,
+      preview: URL.createObjectURL(file)
+    }));
+
+    setPreviewFiles(prev => [...prev, ...newPreviews]);
+  };
+
+  const removeFile = (index: number) => {
+    setPreviewFiles(prev => {
+      URL.revokeObjectURL(prev[index].preview);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
   const onSubmit = form.handleSubmit((data) => {
     const trimmedTitle = data.title.trim();
     const trimmedContent = data.content.trim();
@@ -123,7 +135,18 @@ export default function HomePage() {
     }
 
     console.log("Submitting form with data:", { title: trimmedTitle, content: trimmedContent });
-    createNoteMutation.mutate(data as any);
+
+    const formData = new FormData();
+    formData.append('title', trimmedTitle);
+    formData.append('content', trimmedContent);
+
+    if (previewFiles.length > 0) {
+      previewFiles.forEach(({ file }) => {
+        formData.append('files', file);
+      });
+    }
+
+    createNoteMutation.mutate(formData);
   });
 
   if (isLoading) {
