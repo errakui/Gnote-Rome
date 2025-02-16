@@ -213,11 +213,19 @@ export function NoteViewer({ noteId, onClose }: Props) {
               <div className="grid grid-cols-2 gap-4">
                 {newAttachments.map((file, index) => (
                   <div key={index} className="relative">
-                    <img
-                      src={URL.createObjectURL(file)}
-                      alt={file.name}
-                      className="w-full h-40 object-cover rounded-lg"
-                    />
+                    {file.type.startsWith('image/') ? (
+                      <img
+                        src={URL.createObjectURL(file)}
+                        alt={file.name}
+                        className="w-full h-40 object-cover rounded-lg"
+                      />
+                    ) : (
+                      <video
+                        src={URL.createObjectURL(file)}
+                        className="w-full h-40 object-cover rounded-lg"
+                        controls
+                      />
+                    )}
                     <button
                       onClick={() => setNewAttachments(prev => prev.filter((_, i) => i !== index))}
                       className="absolute -top-2 -right-2 p-1 bg-red-500 rounded-full hover:bg-red-600"
@@ -232,10 +240,10 @@ export function NoteViewer({ noteId, onClose }: Props) {
         ) : (
           <div className="space-y-8">
             <div className="prose prose-invert max-w-none">
+              <h2 className="text-2xl font-bold mb-4">{note.title}</h2>
               <div className="whitespace-pre-wrap text-lg mb-8">
                 {decryptedContent}
               </div>
-              <h2 className="text-2xl font-bold mb-4">{note.title}</h2>
             </div>
 
             {note.attachments && note.attachments.length > 0 && (
