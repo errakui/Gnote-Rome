@@ -50,19 +50,10 @@ export default function HomePage() {
   });
 
   const createNoteMutation = useMutation({
-    mutationFn: async (data: FormData) => {
+    mutationFn: async (data: any) => {
       if (!user?.id) throw new Error("Errore di autenticazione");
 
-      console.log("Form data being sent:", {
-        title: data.get('title'),
-        content: data.get('content')
-      });
-
-
-      console.log("FormData entries:");
-      for (let [key, value] of data.entries()) {
-        console.log(key, value);
-      }
+      console.log("Data being sent:", data);
 
       const res = await apiRequest("POST", "/api/notes", data);
       if (!res.ok) {
@@ -136,17 +127,25 @@ export default function HomePage() {
 
     console.log("Submitting form with data:", { title: trimmedTitle, content: trimmedContent });
 
-    const formData = new FormData();
-    formData.append('title', trimmedTitle);
-    formData.append('content', trimmedContent);
+    // Create a plain object instead of FormData
+    const noteData = {
+      title: trimmedTitle,
+      content: trimmedContent,
+      attachments: []
+    };
 
+    // Add attachments if present
     if (previewFiles.length > 0) {
-      previewFiles.forEach(({ file }) => {
-        formData.append('files', file);
-      });
+      noteData.attachments = previewFiles.map(({ file }) => ({
+        type: file.type.startsWith("image/") ? "image" : "video",
+        url: URL.createObjectURL(file),
+        fileName: file.name,
+        mimeType: file.type,
+        size: file.size
+      }));
     }
 
-    createNoteMutation.mutate(formData);
+    createNoteMutation.mutate(noteData);
   });
 
   if (isLoading) {
