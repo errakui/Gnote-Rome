@@ -1,4 +1,4 @@
-// File vuoto per compatibilità, nessuna crittografia necessaria
+// File vuoto per compatibilità
 export function encryptText(text: string): string {
   return text;
 }
@@ -7,7 +7,7 @@ export function decryptText(text: string): string {
   return text;
 }
 
-export function encryptFile(file: File): Promise<{
+export async function encryptFile(file: File): Promise<{
   data: string;
   fileName: string;
   mimeType: string;
@@ -15,19 +15,15 @@ export function encryptFile(file: File): Promise<{
 }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = (event) => {
-      if (!event.target?.result) {
-        reject(new Error("Errore nella lettura del file"));
-        return;
-      }
+    reader.onload = () => {
       resolve({
-        data: event.target.result.toString(),
+        data: reader.result as string,
         fileName: file.name,
         mimeType: file.type,
         type: file.type.startsWith("image/") ? "image" : "video"
       });
     };
-    reader.onerror = () => reject(new Error("Errore nella lettura del file"));
+    reader.onerror = reject;
     reader.readAsDataURL(file);
   });
 }

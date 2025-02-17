@@ -51,12 +51,6 @@ export default function HomePage() {
     mutationFn: async (data: { title: string; content: string; attachments: any[] }) => {
       if (!user?.id) throw new Error("Errore di autenticazione");
 
-      console.log("Submitting note data:", {
-        title: data.title,
-        contentLength: data.content.length,
-        attachmentsCount: data.attachments.length
-      });
-
       const res = await apiRequest("POST", "/api/notes", data);
       if (!res.ok) {
         const error = await res.json();
@@ -128,7 +122,6 @@ export default function HomePage() {
     }
 
     try {
-      // Convert files to base64
       const attachmentPromises = previewFiles.map(async ({ file }) => {
         return new Promise<{
           type: "image" | "video";
@@ -154,13 +147,11 @@ export default function HomePage() {
 
       const attachments = await Promise.all(attachmentPromises);
 
-      const noteData = {
+      createNoteMutation.mutate({
         title: trimmedTitle,
         content: trimmedContent,
         attachments
-      };
-
-      createNoteMutation.mutate(noteData);
+      });
     } catch (error) {
       toast({
         title: "Errore",

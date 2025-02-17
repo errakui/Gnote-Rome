@@ -77,7 +77,6 @@ export function NoteViewer({ noteId, onClose }: Props) {
         if (!res.ok) throw new Error(await res.text());
         return res.json();
       } catch (error) {
-        console.error("Error updating note:", error);
         throw error;
       }
     },
