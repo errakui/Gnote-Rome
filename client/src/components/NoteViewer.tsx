@@ -48,7 +48,6 @@ export function NoteViewer({ noteId, onClose }: Props) {
   const updateMutation = useMutation({
     mutationFn: async (data: { title: string; content: string; files?: File[] }) => {
       try {
-        // Converte i files in base64
         const filePromises = data.files?.map(async (file) => {
           return new Promise((resolve, reject) => {
             const reader = new FileReader();
