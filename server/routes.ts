@@ -5,6 +5,7 @@ import { storage } from "./storage";
 import express from "express";
 import { insertNoteSchema } from "@shared/schema";
 import { z } from "zod";
+import path from "path";
 
 export function registerRoutes(app: Express): Server {
   // Aumenta il limite del body parser per gestire gli allegati
@@ -13,6 +14,7 @@ export function registerRoutes(app: Express): Server {
 
   setupAuth(app);
 
+  // API Routes
   app.get("/api/notes", async (req, res) => {
     if (!req.isAuthenticated() || !req.user?.id) {
       console.log("Tentativo di accesso non autorizzato alle note");
@@ -111,7 +113,6 @@ export function registerRoutes(app: Express): Server {
         return res.sendStatus(401);
       }
 
-      // Debug logs
       console.log("[POST /api/notes] Corpo richiesta ricevuto:", req.body);
 
       const { title, content } = req.body;
@@ -172,6 +173,21 @@ export function registerRoutes(app: Express): Server {
       });
     }
   });
+
+  // Serve static files in production
+  if (process.env.NODE_ENV === 'production') {
+    const clientPath = path.join(__dirname, '../client/dist');
+    app.use(express.static(clientPath));
+
+    // Handle client-side routing
+    app.get('*', (req, res) => {
+      // Skip API routes
+      if (req.path.startsWith('/api/')) {
+        return res.sendStatus(404);
+      }
+      res.sendFile(path.join(clientPath, 'index.html'));
+    });
+  }
 
   const httpServer = createServer(app);
   return httpServer;
