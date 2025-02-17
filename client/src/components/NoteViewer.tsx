@@ -24,7 +24,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { encryptFile } from "@/lib/crypto";
 import { useAuth } from "@/hooks/use-auth";
 
 interface Props {
@@ -48,22 +47,26 @@ export function NoteViewer({ noteId, onClose }: Props) {
 
   const updateMutation = useMutation({
     mutationFn: async (data: { title: string; content: string; files?: File[] }) => {
-      console.log("Updating note:", { noteId, ...data });
-
       try {
-        // Convert files to base64
-        const attachmentPromises = data.files?.map(async (file) => {
-          const fileData = await encryptFile(file);
-          return {
-            type: fileData.type,
-            url: fileData.data,
-            fileName: fileData.fileName,
-            mimeType: fileData.mimeType,
-            size: file.size
-          };
+        // Converte i files in base64
+        const filePromises = data.files?.map(async (file) => {
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              resolve({
+                type: file.type.startsWith("image/") ? "image" : "video",
+                url: reader.result as string,
+                fileName: file.name,
+                mimeType: file.type,
+                size: file.size
+              });
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
         }) || [];
 
-        const attachments = await Promise.all(attachmentPromises);
+        const attachments = await Promise.all(filePromises);
 
         const updateData = {
           title: data.title.trim(),
@@ -152,8 +155,6 @@ export function NoteViewer({ noteId, onClose }: Props) {
       </div>
     );
   }
-
-  console.log("Note data:", note);
 
   return (
     <div className="flex flex-col h-full bg-black text-white">
