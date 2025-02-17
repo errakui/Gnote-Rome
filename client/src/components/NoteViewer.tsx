@@ -40,6 +40,15 @@ export function NoteViewer({ noteId, onClose }: Props) {
 
   const { data: note, isLoading } = useQuery<Note>({
     queryKey: ["/api/notes", noteId],
+    queryFn: async () => {
+      const res = await fetch(`/api/notes/${noteId}`, {
+        credentials: 'include'
+      });
+      if (!res.ok) {
+        throw new Error('Failed to fetch note');
+      }
+      return res.json();
+    },
     enabled: !!noteId,
   });
 
@@ -150,6 +159,8 @@ export function NoteViewer({ noteId, onClose }: Props) {
       </div>
     );
   }
+
+  console.log("Note data:", note); // Debug log
 
   return (
     <div className="flex flex-col h-full">
