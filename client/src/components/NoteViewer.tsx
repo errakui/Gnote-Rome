@@ -24,7 +24,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/hooks/use-auth";
-import { decryptText } from "@/lib/crypto";
 
 interface Props {
   noteId: number;
@@ -130,15 +129,16 @@ export function NoteViewer({ noteId, onClose }: Props) {
     );
   }
 
-  const decryptedContent = note.content ? decryptText(note.content) : 'Errore nella decrittazione';
-
   return (
     <div className="flex flex-col h-full bg-black text-white">
       <div className="flex justify-between items-center p-6 border-b border-zinc-800">
         <div className="flex gap-2">
           {!isEditing && (
             <>
-              <Button variant="outline" onClick={() => setIsEditing(true)} className="hover:bg-zinc-800">
+              <Button variant="outline" onClick={() => {
+                setIsEditing(true);
+                setEditContent(note.content);
+              }} className="hover:bg-zinc-800">
                 <Edit2 className="h-4 w-4 mr-2" />
                 Modifica
               </Button>
@@ -166,7 +166,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
                 variant="outline"
                 onClick={() => {
                   setIsEditing(false);
-                  setEditContent(decryptedContent);
+                  setEditContent(note.content);
                   setNewAttachments([]);
                 }}
                 className="hover:bg-zinc-800"
@@ -186,7 +186,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
         {isEditing ? (
           <div className="space-y-6">
             <Textarea
-              value={editContent || decryptedContent}
+              value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
               className="w-full min-h-[300px] text-lg bg-zinc-800 border-zinc-700"
               placeholder="Contenuto della nota..."
@@ -242,7 +242,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
             <div className="prose prose-invert max-w-none">
               <h2 className="text-2xl font-bold mb-4">{note.title}</h2>
               <div className="whitespace-pre-wrap text-lg mb-8">
-                {decryptedContent}
+                {note.content}
               </div>
             </div>
 
