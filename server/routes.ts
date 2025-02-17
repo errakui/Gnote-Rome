@@ -5,11 +5,7 @@ import { storage } from "./storage";
 import express from "express";
 import { insertNoteSchema } from "@shared/schema";
 import { z } from "zod";
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { join } from 'path';
 
 export function registerRoutes(app: Express): Server {
   // Aumenta il limite del body parser per gestire gli allegati
@@ -180,21 +176,18 @@ export function registerRoutes(app: Express): Server {
 
   // Serve static files in production
   if (process.env.NODE_ENV === 'production') {
-    // Calculate the correct path to the client dist folder
-    const clientDistPath = join(__dirname, '..', 'client', 'dist');
-    console.log('Client dist path:', clientDistPath);
+    console.log("Configurazione file statici per produzione");
+    const staticPath = join(process.cwd(), 'client', 'dist');
+    console.log("Path file statici:", staticPath);
 
-    // Serve static files
-    app.use(express.static(clientDistPath));
+    app.use(express.static(staticPath));
 
-    // Handle client-side routing
     app.get('*', (req, res) => {
-      // Skip API routes
       if (req.path.startsWith('/api/')) {
         return res.sendStatus(404);
       }
-      console.log('Serving index.html for path:', req.path);
-      res.sendFile(join(clientDistPath, 'index.html'));
+      console.log("Serving index.html per:", req.path);
+      res.sendFile(join(staticPath, 'index.html'));
     });
   }
 
