@@ -4,6 +4,7 @@ import { Note } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Trash2,
@@ -35,6 +36,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
   const { user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const [newAttachments, setNewAttachments] = useState<File[]>([]);
 
@@ -44,22 +46,20 @@ export function NoteViewer({ noteId, onClose }: Props) {
 
   const updateMutation = useMutation({
     mutationFn: async ({
+      title,
       content,
       files,
     }: {
+      title: string;
       content: string;
       files?: File[];
     }) => {
-      const formData = new FormData();
-      formData.append('content', content);
+      const data = {
+        title,
+        content,
+      };
 
-      if (files?.length) {
-        files.forEach((file) => {
-          formData.append('files', file);
-        });
-      }
-
-      const res = await apiRequest("PATCH", `/api/notes/${noteId}`, formData);
+      const res = await apiRequest("PATCH", `/api/notes/${noteId}`, data);
       if (!res.ok) {
         const error = await res.text();
         throw new Error(error || "Errore durante l'aggiornamento");
@@ -135,10 +135,15 @@ export function NoteViewer({ noteId, onClose }: Props) {
         <div className="flex gap-2">
           {!isEditing && (
             <>
-              <Button variant="outline" onClick={() => {
-                setIsEditing(true);
-                setEditContent(note.content);
-              }} className="hover:bg-zinc-800">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setIsEditing(true);
+                  setEditTitle(note.title);
+                  setEditContent(note.content);
+                }} 
+                className="hover:bg-zinc-800"
+              >
                 <Edit2 className="h-4 w-4 mr-2" />
                 Modifica
               </Button>
@@ -150,11 +155,15 @@ export function NoteViewer({ noteId, onClose }: Props) {
           )}
           {isEditing && (
             <>
-              <Button onClick={() => updateMutation.mutate({
-                content: editContent,
-                files: newAttachments.length > 0 ? newAttachments : undefined,
-              })} disabled={updateMutation.isPending}
-              className="hover:bg-zinc-700">
+              <Button 
+                onClick={() => updateMutation.mutate({
+                  title: editTitle,
+                  content: editContent,
+                  files: newAttachments.length > 0 ? newAttachments : undefined,
+                })} 
+                disabled={updateMutation.isPending}
+                className="hover:bg-zinc-700"
+              >
                 {updateMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 ) : (
@@ -166,6 +175,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
                 variant="outline"
                 onClick={() => {
                   setIsEditing(false);
+                  setEditTitle(note.title);
                   setEditContent(note.content);
                   setNewAttachments([]);
                 }}
@@ -182,6 +192,14 @@ export function NoteViewer({ noteId, onClose }: Props) {
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {isEditing ? (
           <div className="space-y-6">
+            <div>
+              <Input
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="text-2xl font-bold bg-zinc-800 border-zinc-700"
+                placeholder="Titolo della nota..."
+              />
+            </div>
             <Textarea
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
