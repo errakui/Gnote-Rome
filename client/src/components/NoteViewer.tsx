@@ -24,7 +24,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useAuth } from "@/hooks/use-auth";
 
 interface Props {
   noteId: number;
@@ -33,7 +32,6 @@ interface Props {
 
 export function NoteViewer({ noteId, onClose }: Props) {
   const { toast } = useToast();
-  const { user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [editTitle, setEditTitle] = useState("");
@@ -42,7 +40,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
 
   const { data: note, isLoading } = useQuery<Note>({
     queryKey: ["/api/notes", noteId],
-    retry: false,
+    enabled: !!noteId,
   });
 
   const updateMutation = useMutation({
@@ -67,13 +65,12 @@ export function NoteViewer({ noteId, onClose }: Props) {
 
         const attachments = await Promise.all(filePromises);
 
-        const updateData = {
+        const res = await apiRequest("PATCH", `/api/notes/${noteId}`, {
           title: data.title.trim(),
           content: data.content.trim(),
-          ...(attachments.length > 0 && { attachments })
-        };
+          attachments: attachments.length > 0 ? attachments : note?.attachments
+        });
 
-        const res = await apiRequest("PATCH", `/api/notes/${noteId}`, updateData);
         if (!res.ok) throw new Error(await res.text());
         return res.json();
       } catch (error) {
@@ -155,10 +152,10 @@ export function NoteViewer({ noteId, onClose }: Props) {
   }
 
   return (
-    <div className="flex flex-col h-full bg-black text-white">
-      <div className="flex justify-between items-center p-6 border-b border-zinc-800">
+    <div className="flex flex-col h-full">
+      <div className="flex justify-between items-center p-6 border-b">
         <div className="flex gap-2">
-          {!isEditing && (
+          {!isEditing ? (
             <>
               <Button 
                 variant="outline" 
@@ -166,8 +163,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
                   setIsEditing(true);
                   setEditTitle(note.title);
                   setEditContent(note.content);
-                }} 
-                className="hover:bg-zinc-800"
+                }}
               >
                 <Edit2 className="h-4 w-4 mr-2" />
                 Modifica
@@ -177,8 +173,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
                 Elimina
               </Button>
             </>
-          )}
-          {isEditing && (
+          ) : (
             <>
               <Button 
                 onClick={() => updateMutation.mutate({
@@ -187,7 +182,6 @@ export function NoteViewer({ noteId, onClose }: Props) {
                   files: previewFiles.map(pf => pf.file)
                 })} 
                 disabled={updateMutation.isPending}
-                className="hover:bg-zinc-700"
               >
                 {updateMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -204,7 +198,6 @@ export function NoteViewer({ noteId, onClose }: Props) {
                   setEditContent(note.content);
                   setPreviewFiles([]);
                 }}
-                className="hover:bg-zinc-800"
               >
                 <X className="h-4 w-4 mr-2" />
                 Annulla
@@ -221,14 +214,14 @@ export function NoteViewer({ noteId, onClose }: Props) {
               <Input
                 value={editTitle}
                 onChange={(e) => setEditTitle(e.target.value)}
-                className="text-2xl font-bold bg-zinc-800 border-zinc-700"
+                className="text-2xl font-bold"
                 placeholder="Titolo della nota..."
               />
             </div>
             <Textarea
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
-              className="w-full min-h-[300px] text-lg bg-zinc-800 border-zinc-700"
+              className="w-full min-h-[300px] text-lg"
               placeholder="Contenuto della nota..."
             />
 
@@ -241,9 +234,9 @@ export function NoteViewer({ noteId, onClose }: Props) {
               onChange={handleFileChange}
             />
             <label htmlFor="file-upload" className="cursor-pointer block">
-              <div className="border-2 border-dashed border-zinc-700 rounded-lg p-6 text-center hover:border-zinc-500">
-                <Plus className="mx-auto h-12 w-12 text-zinc-400" />
-                <p className="mt-2 text-sm text-zinc-400">
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400">
+                <Plus className="mx-auto h-12 w-12 text-gray-400" />
+                <p className="mt-2 text-sm text-gray-500">
                   Aggiungi media (max 5MB per file)
                 </p>
               </div>
@@ -279,7 +272,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
           </div>
         ) : (
           <div className="space-y-8">
-            <div className="prose prose-invert max-w-none">
+            <div className="prose prose-lg max-w-none">
               <h2 className="text-2xl font-bold mb-4">{note.title}</h2>
               <div className="whitespace-pre-wrap text-lg mb-8">
                 {note.content}
@@ -294,13 +287,13 @@ export function NoteViewer({ noteId, onClose }: Props) {
                       <img
                         src={attachment.url}
                         alt={attachment.fileName}
-                        className="w-full rounded-lg border border-zinc-800 transition-transform hover:scale-105"
+                        className="w-full rounded-lg border border-gray-200 transition-transform hover:scale-105"
                       />
                     ) : (
                       <video
                         src={attachment.url}
                         controls
-                        className="w-full rounded-lg border border-zinc-800"
+                        className="w-full rounded-lg border border-gray-200"
                       />
                     )}
                   </div>
@@ -312,7 +305,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
       </div>
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent className="bg-zinc-900 border-zinc-800">
+        <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Conferma eliminazione</AlertDialogTitle>
             <AlertDialogDescription>
@@ -320,7 +313,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="hover:bg-zinc-800">Annulla</AlertDialogCancel>
+            <AlertDialogCancel>Annulla</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteMutation.mutate()}
               className="bg-red-500 hover:bg-red-600"
