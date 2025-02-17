@@ -12,7 +12,6 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { type Note } from "@shared/schema";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { encryptFile, encryptText } from "@/lib/crypto";
 import { Label } from "@/components/ui/label";
 import { LogOut, Plus, Loader2, Lock, Shield, Image, Video, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,7 +19,6 @@ import { useState } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { NoteViewer } from "@/components/NoteViewer";
 import { z } from "zod";
-import React from 'react';
 
 const formSchema = z.object({
   title: z.string().min(1, "Il titolo è obbligatorio").trim(),
@@ -117,8 +115,8 @@ export default function HomePage() {
   };
 
   const onSubmit = async (data: FormData) => {
-    const trimmedTitle = form.getValues("title").trim();
-    const trimmedContent = form.getValues("content").trim();
+    const trimmedTitle = data.title.trim();
+    const trimmedContent = data.content.trim();
 
     if (!trimmedTitle || !trimmedContent) {
       toast({
@@ -132,14 +130,26 @@ export default function HomePage() {
     try {
       // Convert files to base64
       const attachmentPromises = previewFiles.map(async ({ file }) => {
-        const fileData = await encryptFile(file);
-        return {
-          type: fileData.type,
-          url: fileData.data,
-          fileName: fileData.fileName,
-          mimeType: fileData.mimeType,
-          size: file.size
-        };
+        return new Promise<{
+          type: "image" | "video";
+          url: string;
+          fileName: string;
+          mimeType: string;
+          size: number;
+        }>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            resolve({
+              type: file.type.startsWith("image/") ? "image" : "video",
+              url: reader.result as string,
+              fileName: file.name,
+              mimeType: file.type,
+              size: file.size
+            });
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
       });
 
       const attachments = await Promise.all(attachmentPromises);
@@ -205,97 +215,90 @@ export default function HomePage() {
         </div>
 
         <Dialog open={showCreateNote} onOpenChange={setShowCreateNote}>
-          <DialogContent className="max-w-[95vw] w-[95vw] h-[95vh] p-0 bg-zinc-900 border-zinc-800">
-            <div className="flex flex-col h-full">
-              <div className="flex justify-between items-center p-6 border-b border-zinc-800">
-                <h2 className="text-2xl font-bold">Nuova Nota</h2>
-                <Button variant="ghost" onClick={() => setShowCreateNote(false)}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-6">
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="title">Titolo</Label>
-                    <Input
-                      id="title"
-                      {...form.register("title")}
-                      className="bg-zinc-800 border-zinc-700"
-                    />
-                    {form.formState.errors.title && (
-                      <p className="text-red-500 text-sm">{form.formState.errors.title.message}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="content">Contenuto</Label>
-                    <Textarea
-                      id="content"
-                      {...form.register("content")}
-                      className="min-h-[200px] bg-zinc-800 border-zinc-700"
-                    />
-                    {form.formState.errors.content && (
-                      <p className="text-red-500 text-sm">{form.formState.errors.content.message}</p>
-                    )}
-                  </div>
-
-                  <input
-                    type="file"
-                    className="hidden"
-                    id="file-upload"
-                    multiple
-                    accept="image/*,video/*"
-                    onChange={handleFileChange}
+          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold">Nuova Nota</h2>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="title">Titolo</Label>
+                  <Input
+                    id="title"
+                    {...form.register("title")}
+                    className="bg-zinc-800 border-zinc-700"
                   />
-                  <label htmlFor="file-upload" className="cursor-pointer block">
-                    <div className="border-2 border-dashed border-zinc-700 rounded-lg p-6 text-center hover:border-zinc-500">
-                      <Plus className="mx-auto h-12 w-12 text-zinc-400" />
-                      <p className="mt-2 text-sm text-zinc-400">
-                        Aggiungi media (max 10MB per file)
-                      </p>
-                    </div>
-                  </label>
-
-                  {previewFiles.length > 0 && (
-                    <div className="grid grid-cols-2 gap-4">
-                      {previewFiles.map(({ file, preview }, index) => (
-                        <div key={index} className="relative">
-                          {file.type.startsWith('image/') ? (
-                            <img
-                              src={preview}
-                              alt={file.name}
-                              className="w-full h-40 object-cover rounded-lg"
-                            />
-                          ) : (
-                            <video
-                              src={preview}
-                              className="w-full h-40 object-cover rounded-lg"
-                              controls
-                            />
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => removeFile(index)}
-                            className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+                  {form.formState.errors.title && (
+                    <p className="text-red-500 text-sm">{form.formState.errors.title.message}</p>
                   )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="content">Contenuto</Label>
+                  <Textarea
+                    id="content"
+                    {...form.register("content")}
+                    className="min-h-[200px] bg-zinc-800 border-zinc-700"
+                  />
+                  {form.formState.errors.content && (
+                    <p className="text-red-500 text-sm">{form.formState.errors.content.message}</p>
+                  )}
+                </div>
 
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={createNoteMutation.isPending}
-                  >
-                    {createNoteMutation.isPending ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : null}
-                    Salva Nota
-                  </Button>
-                </form>
-              </div>
+                <input
+                  type="file"
+                  className="hidden"
+                  id="file-upload"
+                  multiple
+                  accept="image/*,video/*"
+                  onChange={handleFileChange}
+                />
+                <label htmlFor="file-upload" className="cursor-pointer block">
+                  <div className="border-2 border-dashed border-zinc-700 rounded-lg p-6 text-center hover:border-zinc-500">
+                    <Plus className="mx-auto h-12 w-12 text-zinc-400" />
+                    <p className="mt-2 text-sm text-zinc-400">
+                      Aggiungi media (max 10MB per file)
+                    </p>
+                  </div>
+                </label>
+
+                {previewFiles.length > 0 && (
+                  <div className="grid grid-cols-2 gap-4">
+                    {previewFiles.map(({ file, preview }, index) => (
+                      <div key={index} className="relative">
+                        {file.type.startsWith('image/') ? (
+                          <img
+                            src={preview}
+                            alt={file.name}
+                            className="w-full h-40 object-cover rounded-lg"
+                          />
+                        ) : (
+                          <video
+                            src={preview}
+                            className="w-full h-40 object-cover rounded-lg"
+                            controls
+                          />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeFile(index)}
+                          className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={createNoteMutation.isPending}
+                >
+                  {createNoteMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
+                  Salva Nota
+                </Button>
+              </form>
             </div>
           </DialogContent>
         </Dialog>
@@ -351,7 +354,7 @@ export default function HomePage() {
                   </CardContent>
                 </Card>
               </DialogTrigger>
-              <DialogContent className="max-w-[95vw] w-[95vw] h-[95vh] p-0 bg-zinc-900 border-zinc-800">
+              <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
                 {selectedNoteId === note.id && (
                   <NoteViewer
                     noteId={note.id}
