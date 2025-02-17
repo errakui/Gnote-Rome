@@ -177,7 +177,7 @@ export function registerRoutes(app: Express): Server {
   // Serve static files in production
   if (process.env.NODE_ENV === 'production') {
     console.log("Configurazione file statici per produzione");
-    const staticPath = join(process.cwd(), 'client', 'dist');
+    const staticPath = join(process.cwd(), 'dist', 'public');
     console.log("Path file statici:", staticPath);
 
     app.use(express.static(staticPath));
