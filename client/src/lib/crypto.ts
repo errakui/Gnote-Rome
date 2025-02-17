@@ -1,4 +1,4 @@
-// Funzioni semplificate senza crittografia
+// File vuoto per compatibilità, nessuna crittografia necessaria
 export function encryptText(text: string): string {
   return text;
 }

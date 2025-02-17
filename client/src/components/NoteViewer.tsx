@@ -24,6 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { encryptFile } from "@/lib/crypto";
 import { useAuth } from "@/hooks/use-auth";
 
 interface Props {
@@ -38,40 +39,51 @@ export function NoteViewer({ noteId, onClose }: Props) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
-  const [newAttachments, setNewAttachments] = useState<File[]>([]);
+  const [previewFiles, setPreviewFiles] = useState<{ file: File; preview: string }[]>([]);
 
   const { data: note, isLoading } = useQuery<Note>({
     queryKey: ["/api/notes", noteId],
+    retry: false,
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({
-      title,
-      content,
-      files,
-    }: {
-      title: string;
-      content: string;
-      files?: File[];
-    }) => {
-      const data = {
-        title,
-        content,
-      };
+    mutationFn: async (data: { title: string; content: string; files?: File[] }) => {
+      console.log("Updating note:", { noteId, ...data });
 
-      const res = await apiRequest("PATCH", `/api/notes/${noteId}`, data);
-      if (!res.ok) {
-        const error = await res.text();
-        throw new Error(error || "Errore durante l'aggiornamento");
+      try {
+        // Convert files to base64
+        const attachmentPromises = data.files?.map(async (file) => {
+          const fileData = await encryptFile(file);
+          return {
+            type: fileData.type,
+            url: fileData.data,
+            fileName: fileData.fileName,
+            mimeType: fileData.mimeType,
+            size: file.size
+          };
+        }) || [];
+
+        const attachments = await Promise.all(attachmentPromises);
+
+        const updateData = {
+          title: data.title.trim(),
+          content: data.content.trim(),
+          ...(attachments.length > 0 && { attachments })
+        };
+
+        const res = await apiRequest("PATCH", `/api/notes/${noteId}`, updateData);
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      } catch (error) {
+        console.error("Error updating note:", error);
+        throw error;
       }
-
-      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notes", noteId] });
       queryClient.invalidateQueries({ queryKey: ["/api/notes"] });
       setIsEditing(false);
-      setNewAttachments([]);
+      setPreviewFiles([]);
       toast({ title: "Successo", description: "Nota aggiornata" });
     },
     onError: (error) => {
@@ -99,7 +111,19 @@ export function NoteViewer({ noteId, onClose }: Props) {
       return file.type.startsWith("image/") || file.type.startsWith("video/");
     });
 
-    setNewAttachments((prev) => [...prev, ...validFiles]);
+    const newPreviews = validFiles.map(file => ({
+      file,
+      preview: URL.createObjectURL(file)
+    }));
+
+    setPreviewFiles(prev => [...prev, ...newPreviews]);
+  };
+
+  const removeFile = (index: number) => {
+    setPreviewFiles(prev => {
+      URL.revokeObjectURL(prev[index].preview);
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const deleteMutation = useMutation({
@@ -128,6 +152,8 @@ export function NoteViewer({ noteId, onClose }: Props) {
       </div>
     );
   }
+
+  console.log("Note data:", note);
 
   return (
     <div className="flex flex-col h-full bg-black text-white">
@@ -159,7 +185,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
                 onClick={() => updateMutation.mutate({
                   title: editTitle,
                   content: editContent,
-                  files: newAttachments.length > 0 ? newAttachments : undefined,
+                  files: previewFiles.map(pf => pf.file)
                 })} 
                 disabled={updateMutation.isPending}
                 className="hover:bg-zinc-700"
@@ -177,7 +203,7 @@ export function NoteViewer({ noteId, onClose }: Props) {
                   setIsEditing(false);
                   setEditTitle(note.title);
                   setEditContent(note.content);
-                  setNewAttachments([]);
+                  setPreviewFiles([]);
                 }}
                 className="hover:bg-zinc-800"
               >
@@ -224,25 +250,25 @@ export function NoteViewer({ noteId, onClose }: Props) {
               </div>
             </label>
 
-            {newAttachments.length > 0 && (
+            {previewFiles.length > 0 && (
               <div className="grid grid-cols-2 gap-4">
-                {newAttachments.map((file, index) => (
+                {previewFiles.map(({ file, preview }, index) => (
                   <div key={index} className="relative">
                     {file.type.startsWith('image/') ? (
                       <img
-                        src={URL.createObjectURL(file)}
+                        src={preview}
                         alt={file.name}
                         className="w-full h-40 object-cover rounded-lg"
                       />
                     ) : (
                       <video
-                        src={URL.createObjectURL(file)}
+                        src={preview}
                         className="w-full h-40 object-cover rounded-lg"
                         controls
                       />
                     )}
                     <button
-                      onClick={() => setNewAttachments(prev => prev.filter((_, i) => i !== index))}
+                      onClick={() => removeFile(index)}
                       className="absolute -top-2 -right-2 p-1 bg-red-500 rounded-full hover:bg-red-600"
                     >
                       <X className="h-4 w-4" />
