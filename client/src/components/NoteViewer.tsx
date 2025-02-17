@@ -177,9 +177,6 @@ export function NoteViewer({ noteId, onClose }: Props) {
             </>
           )}
         </div>
-        <Button variant="ghost" onClick={onClose} size="icon" className="hover:bg-zinc-800">
-          <X className="h-4 w-4" />
-        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
