@@ -1,6 +1,131 @@
-node_modules
-dist
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+*.lcov
+.nyc_output
+
+# Production builds
+dist/
+build/
+out/
+*.production
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# OS files
 .DS_Store
-server/public
-vite.config.ts.*
-*.tar.gz
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# React Native / Mobile specific
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+.expo/
+.expo-shared/
+
+# Android specific
+mobile/GhubMobile/android/.gradle/
+mobile/GhubMobile/android/build/
+mobile/GhubMobile/android/local.properties
+mobile/GhubMobile/android/app/build/
+mobile/GhubMobile/android/.idea/
+mobile/GhubMobile/android/gradle/
+mobile/GhubMobile/android/gradlew
+mobile/GhubMobile/android/gradlew.bat
+*.iml
+*.hprof
+
+# iOS specific
+mobile/GhubMobile/ios/Pods/
+mobile/GhubMobile/ios/build/
+mobile/GhubMobile/ios/*.xcworkspace
+mobile/GhubMobile/ios/*.xcuserstate
+mobile/GhubMobile/ios/.xcode.env.local
+
+# Metro
+.metro-health-check*
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+*.cache
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+
+# Certificates
+*.pem
+*.crt
+*.cer
+
+# Backup files
+*.backup
+*.bak
+
+# Package lock files (choose one)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# Misc
+.eslintcache
+.parcel-cache
+.turbo
+.vercel
+.next
+.nuxt
+.vuepress/dist
+.serverless/
+.fusebox/
+.dynamodb/
+.tern-port
+.vscode-test
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
