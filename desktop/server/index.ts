@@ -4,7 +4,13 @@ import { setupAuth } from "./auth";
 import { registerRoutes } from "./routes";
 import cors from "cors";
 import dotenv from "dotenv";
+import path, { dirname } from "path";
+import { fileURLToPath } from "url";
+
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const app = express();
 
@@ -34,6 +40,11 @@ if (process.env.NODE_ENV !== "production") {
   setupVite(app, httpServer);
 } else {
   console.log("Ambiente di produzione: configurazione servizio file statici...");
+  const buildPath = path.resolve(__dirname, "..", "dist", "public");
+  app.use(express.static(buildPath));
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(buildPath, "index.html"));
+  });
 }
 
 const port = process.env.PORT || 5000;

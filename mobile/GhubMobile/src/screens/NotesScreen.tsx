@@ -37,8 +37,12 @@ const NotesScreen: React.FC<NotesScreenProps> = ({navigation}) => {
 
 
   useEffect(() => {
-    loadNotes();
-  }, []);
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadNotes();
+    });
+
+    return unsubscribe;
+  }, [navigation]);
 
   const loadNotes = async () => {
     try {
