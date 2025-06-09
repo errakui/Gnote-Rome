@@ -1,0 +1,43 @@
+name: securenotes-app
+region: nyc
+services:
+  - name: backend
+    environment_slug: node-js
+    github:
+      branch: main
+      deploy_on_push: true
+      repo: errakui/Gnote-Rome
+    source_dir: /desktop
+    build_command: npm install
+    run_command: npm start
+    http_port: 5001
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        value: "postgresql://Gnote_owner:npg_CIA3W2yroiXH@ep-fragrant-sun-abelh3vq-pooler.eu-west-2.aws.neon.tech/Gnote?sslmode=require"
+      - key: SESSION_SECRET
+        value: "your-super-secret-session-key-change-this"
+      - key: PORT
+        value: "5001"
+    
+  - name: frontend
+    environment_slug: node-js
+    github:
+      branch: main
+      deploy_on_push: true
+      repo: errakui/Gnote-Rome
+    source_dir: /desktop
+    build_command: npm install && npm run build:client
+    run_command: npx serve -s dist -l 3000
+    http_port: 3000
+    envs:
+      - key: VITE_API_URL
+        value: ${backend.PUBLIC_URL}
+    routes:
+      - path: /
+
+databases:
+  - name: db
+    engine: PG
+    production: false 
